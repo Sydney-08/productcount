@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="一次計算商品折扣、店家點數、信用卡與行動支付回饋。">
+  <title>這筆到底幾折？</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="hero">
+    <div class="shell">
+      <p class="eyebrow">優惠回饋計算 App</p>
+      <h1>這筆到底幾折？</h1>
+      <p class="subtitle">一次算完折扣、點數與信用卡回饋</p>
+    </div>
+  </header>
+
+  <nav class="tabs shell" aria-label="主要功能">
+    <button type="button" class="tab-button active" data-tab="calculatorPage">優惠計算</button>
+    <button type="button" class="tab-button" data-tab="savedPage">計算紀錄 <span id="savedCount">0</span></button>
+    <button type="button" class="tab-button" data-tab="purchasePage">買單紀錄 <span id="purchaseCount">0</span></button>
+    <button type="button" class="tab-button" data-tab="feedbackPage">意見回饋</button>
+  </nav>
+
+  <main id="calculatorPage" class="shell layout tab-panel active">
+    <form id="calculatorForm" novalidate>
+      <section class="card">
+        <div class="section-heading"><span>1</span><div><h2>商品與折扣</h2><p>輸入單件原價、數量與商品活動</p></div></div>
+        <div class="form-grid">
+          <label>商品原價（元）<input id="unitPrice" type="number" min="0" step="0.01" value="599" inputmode="decimal" required></label>
+          <label>商品數量<input id="quantity" type="number" min="1" step="1" value="1" inputmode="numeric" required></label>
+          <label class="wide">商品折扣類型
+            <select id="discountType">
+              <option value="none">無折扣</option><option value="percent">X 折</option><option value="bogo">買一送一</option>
+              <option value="secondPercent">第二件 X 折</option><option value="pairPercent">兩件 X 折</option>
+              <option value="bundleFixed">任 X 件固定價格</option><option value="thresholdOff">滿額折現金</option>
+              <option value="customOff">自訂折扣金額</option>
+            </select>
+          </label>
+        </div>
+        <div id="discountFields" class="conditional-box" aria-live="polite"></div>
+      </section>
+
+      <section class="card">
+        <div class="section-heading"><span>2</span><div><h2>消費場所與店家點數</h2><p>倍數套用在基礎點數上</p></div></div>
+        <div class="form-grid">
+          <label>消費場所<select id="store"><option value="cosmed">康是美</option><option value="7-eleven">7-ELEVEN</option><option value="watsons">屈臣氏</option><option value="poya">寶雅</option><option value="pxmart">全聯</option><option value="momo">momo</option><option value="shopee">蝦皮</option><option value="other" selected>其他</option></select></label>
+          <label>點數系統<input id="pointSystem" type="text" value="自訂點數" maxlength="30"></label>
+          <label>基礎點數計算方式<select id="storePointMethod"><option value="unit">每 X 元給 Y 點</option><option value="rate">依結帳金額回饋率</option></select></label>
+          <label id="storeRateLabel">基礎回饋率（%）<input id="storeRate" type="number" min="0" max="100" step="0.01" value="0.33" inputmode="decimal"></label>
+          <label id="storeSpendUnitLabel">每多少元獲得點數<input id="storeSpendUnit" type="number" min="0.01" step="0.01" value="1" inputmode="decimal"></label>
+          <label id="storePointsUnitLabel">每單位獲得幾點<input id="storePointsUnit" type="number" min="0" step="0.01" value="1" inputmode="decimal"></label>
+          <label>最低計點消費（元）<input id="storeMinimum" type="number" min="0" step="0.01" value="0" inputmode="decimal"></label>
+          <label>點數倍數<input id="storeMultiplier" type="number" min="0" step="0.01" value="1" inputmode="decimal"></label>
+          <label>倍數定義<select id="multiplierMode"><option value="total">基礎點數 × 倍數</option><option value="extra">額外增加（倍數－1）倍</option></select><small>兩種寫法總點數相同，明細會標示活動定義。</small></label>
+          <label>1 點價值（元）<input id="storePointValue" type="number" min="0" step="0.01" value="1" inputmode="decimal"><small id="storeRuleNote">可自行設定店家點數規則。</small></label>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="section-heading"><span>3</span><div><h2>滿額活動</h2><p>現折先扣除，其餘回饋於付款後計算</p></div></div>
+        <div class="form-grid">
+          <label class="wide">活動類型<select id="thresholdType"><option value="none">無</option><option value="oncePoints">滿 X 元送 Y 點</option><option value="onceCash">滿 X 元送 Y 元</option><option value="repeatPoints">每滿 X 元送 Y 點</option><option value="repeatCash">每滿 X 元送 Y 元</option><option value="instantOff">滿 X 元折 Y 元</option></select></label>
+          <label>門檻 X（元）<input id="thresholdAmount" type="number" min="0" step="0.01" value="1000" inputmode="decimal"></label>
+          <label>回饋 Y（點／元）<input id="thresholdReward" type="number" min="0" step="0.01" value="100" inputmode="decimal"></label>
+          <label>是否累贈<select id="thresholdRepeat"><option value="yes">是</option><option value="no">否</option></select></label>
+          <label>回饋上限（留空＝無）<input id="thresholdCap" type="number" min="0" step="0.01" placeholder="無上限" inputmode="decimal"></label>
+          <label>最低消費門檻（元）<input id="thresholdMinimum" type="number" min="0" step="0.01" value="0" inputmode="decimal"></label>
+          <label>活動點數 1 點價值（元）<input id="thresholdPointValue" type="number" min="0" step="0.01" value="1" inputmode="decimal"></label>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="section-heading"><span>4</span><div><h2>信用卡回饋</h2><p>以實際刷卡金額計算</p></div></div>
+        <label>信用卡回饋類型<select id="cardType"><option value="none">無信用卡回饋</option><option value="cash">現金回饋</option><option value="points">信用卡點數</option></select></label>
+        <div id="cardFields" class="conditional-box" aria-live="polite"></div>
+      </section>
+
+      <section class="card">
+        <div class="section-heading"><span>5</span><div><h2>行動支付回饋</h2><p>可選填，以實際付款金額計算</p></div></div>
+        <div class="form-grid">
+          <label>支付方式<select id="paymentType"><option value="none">無</option><option>LINE Pay</option><option>街口</option><option>Apple Pay</option><option>Google Pay</option><option>Samsung Pay</option><option>其他</option></select></label>
+          <label>回饋（%）<input id="paymentRate" type="number" min="0" max="100" step="0.01" value="0" inputmode="decimal"></label>
+          <label>回饋上限（元，留空＝無）<input id="paymentCap" type="number" min="0" step="0.01" placeholder="無上限" inputmode="decimal"></label>
+        </div>
+      </section>
+
+      <p id="formError" class="error" role="alert" hidden></p>
+      <div class="actions"><button type="button" id="clearBtn" class="button secondary">清除全部</button><button type="button" id="exampleBtn" class="button secondary">載入範例</button><button type="submit" class="button primary">計算</button></div>
+    </form>
+
+    <aside id="results" class="results" aria-live="polite">
+      <div class="result-hero"><p>等效成本</p><strong id="effectiveCost">$0</strong><div><span id="effectiveDiscount">約 0 折</span><span id="rewardRate">總回饋率 0%</span></div></div>
+      <section class="card result-card"><h2>計算結果</h2><dl id="resultList"></dl></section>
+      <details class="card details-card" open><summary>計算明細</summary><ol id="breakdown"></ol></details>
+      <div class="result-actions">
+        <button type="button" id="saveResultBtn" class="button secondary">儲存計算結果</button>
+      </div>
+      <p id="recordMessage" class="record-message" role="status" aria-live="polite"></p>
+      <p class="result-note">回饋價值為估算；實際入點、進位與排除項目請依各活動規則為準。</p>
+    </aside>
+  </main>
+
+  <main id="savedPage" class="shell history-page tab-panel" hidden>
+    <section class="history-summary">
+      <div><span>紀錄筆數</span><strong id="savedTotalCount">0</strong></div>
+      <div><span>付款金額合計</span><strong id="savedPaidTotal">$0</strong></div>
+      <div><span>回饋價值合計</span><strong id="savedRewardTotal">$0</strong></div>
+    </section>
+    <div class="history-heading"><div><h2>計算紀錄</h2><p>儲存想比較或稍後查看的計算結果</p></div><button type="button" id="clearSavedBtn" class="text-button danger">清除全部</button></div>
+    <div id="savedList" class="history-list"></div>
+  </main>
+
+  <main id="purchasePage" class="shell history-page tab-panel" hidden>
+    <section class="history-summary purchase-summary">
+      <div><span>買單筆數</span><strong id="purchaseTotalCount">0</strong></div>
+      <div><span>實際付款總額</span><strong id="purchasePaidTotal">$0</strong></div>
+    </section>
+    <div class="history-heading"><div><h2>確定買單紀錄</h2><p>只記錄已確認購買的實際付款金額</p></div><button type="button" id="clearPurchaseBtn" class="text-button danger">清除全部</button></div>
+    <div id="purchaseList" class="history-list"></div>
+  </main>
+
+  <main id="feedbackPage" class="shell feedback-page tab-panel" hidden>
+    <section class="card feedback-card">
+      <div class="section-heading"><span>✉</span><div><h2>意見回饋</h2><p>你的建議會幫助「這筆到底幾折？」變得更好用</p></div></div>
+      <form id="feedbackForm">
+        <div class="form-grid">
+          <label>你的稱呼<input id="feedbackName" type="text" maxlength="50" placeholder="如何稱呼你？"></label>
+          <label>你的 Email（選填）<input id="feedbackEmail" type="email" maxlength="100" placeholder="方便回覆時聯絡你"></label>
+          <label class="wide">意見類型<select id="feedbackType"><option>功能建議</option><option>計算問題</option><option>操作問題</option><option>錯誤回報</option><option>其他</option></select></label>
+          <label class="wide">回饋內容<textarea id="feedbackMessage" rows="7" maxlength="2000" required placeholder="請描述你的建議、遇到的問題或使用情境……"></textarea><small><span id="feedbackLength">0</span> / 2000 字</small></label>
+        </div>
+        <p id="feedbackError" class="error" role="alert" hidden></p>
+        <button type="submit" class="button primary feedback-submit">寄出意見</button>
+      </form>
+      <p class="feedback-note">按下後會開啟裝置的預設寄信程式，收件人為 <a href="mailto:fs7705417@gmail.com">fs7705417@gmail.com</a>。網站不會儲存你的回饋內容。</p>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
