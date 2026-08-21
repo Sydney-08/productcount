@@ -18,9 +18,11 @@ function calculateProductDiscount(unitPrice, quantity, discount) {
   switch (discount.type) {
     case 'percent': discounted = original * rate; break;
     case 'bogo': discounted = Math.ceil(qty / 2) * price; break;
-    case 'secondPercent': {
-      const pairs = Math.floor(qty / 2), remainder = qty % 2;
-      discounted = pairs * price * (1 + rate) + remainder * price; break;
+    case 'secondPercent': // 相容舊版紀錄：視同第 2 件優惠
+    case 'nthPercent': {
+      const nth = discount.type === 'secondPercent' ? 2 : Math.max(1, Math.floor(clamp(discount.itemNumber, 1)));
+      const groups = Math.floor(qty / nth), remainder = qty % nth;
+      discounted = groups * price * ((nth - 1) + rate) + remainder * price; break;
     }
     case 'pairPercent': {
       const pairs = Math.floor(qty / 2), remainder = qty % 2;
@@ -118,7 +120,8 @@ function renderDiscountFields() {
   const box = document.getElementById('discountFields');
   const rate = '<label>折數（例如 5 代表 5 折）<input id="discountRate" type="number" min="0" max="10" step="0.01" value="5" inputmode="decimal"></label>';
   const map = {
-    percent: rate, secondPercent: rate, pairPercent: rate,
+    percent: rate, pairPercent: rate,
+    nthPercent: '<label>第幾件 X<input id="discountItemNumber" type="number" min="1" step="1" value="2" inputmode="numeric"></label><label>該件折數 Y（例如 5 代表 5 折）<input id="discountRate" type="number" min="0" max="10" step="0.01" value="5" inputmode="decimal"></label>',
     bundleFixed: '<label>活動件數 X<input id="bundleSize" type="number" min="1" step="1" value="3"></label><label>X 件固定價格（元）<input id="bundlePrice" type="number" min="0" step="0.01" value="999"></label>',
     thresholdOff: '<label>每滿金額（元）<input id="productThreshold" type="number" min="0.01" step="0.01" value="1000"></label><label>折抵金額（元）<input id="productOff" type="number" min="0" step="0.01" value="100"></label><label>是否累折<select id="productRepeat"><option value="no">否</option><option value="yes">是</option></select></label>',
     customOff: '<label>自訂折扣金額（元）<input id="productOff" type="number" min="0" step="0.01" value="100"></label>'
@@ -136,7 +139,7 @@ function renderCardFields() {
 function readForm() {
   return {
     unitPrice: clamp(field('unitPrice'), 0), quantity: Math.max(1, Math.floor(clamp(field('quantity'), 1))),
-    discount: { type: field('discountType'), rate: field('discountRate'), bundleSize: field('bundleSize'), bundlePrice: field('bundlePrice'), threshold: field('productThreshold'), off: field('productOff'), repeat: field('productRepeat') === 'yes' },
+    discount: { type: field('discountType'), rate: field('discountRate'), itemNumber: field('discountItemNumber'), bundleSize: field('bundleSize'), bundlePrice: field('bundlePrice'), threshold: field('productThreshold'), off: field('productOff'), repeat: field('productRepeat') === 'yes' },
     storePoints: { system: field('pointSystem'), method: field('storePointMethod'), rate: field('storeRate'), spendUnit: field('storeSpendUnit'), pointsUnit: field('storePointsUnit'), minimum: field('storeMinimum'), multiplier: field('storeMultiplier'), mode: field('multiplierMode'), pointValue: field('storePointValue') },
     threshold: { type: field('thresholdType'), threshold: field('thresholdAmount'), reward: field('thresholdReward'), repeat: field('thresholdRepeat') === 'yes', cap: nullableNumber('thresholdCap'), minimum: field('thresholdMinimum'), pointValue: field('thresholdPointValue') },
     card: { type: field('cardType'), rate: field('cardRate'), cap: nullableNumber('cardCap'), spendUnit: field('cardSpendUnit'), pointsUnit: field('cardPointsUnit'), pointValue: field('cardPointValue') },
