@@ -103,7 +103,8 @@ function calculateAll(data) {
   const paid = round2(Math.max(0, product.discounted - threshold.discount));
   const store = calculateStorePoints(paid, data.storePoints);
   const thresholdPointValue = round2(threshold.points * clamp(data.threshold.pointValue, 0));
-  const card = calculateCardReward(paid, data.card);
+  // 康是美 icash Pay 與信用卡活動互斥，核心層再次阻擋重複回饋。
+  const card = data.storeId === 'cosmed' && data.payment.type === 'icash Pay' ? { cash:0, points:0, value:0 } : calculateCardReward(paid, data.card);
   const payment = calculatePaymentReward(paid, data.payment);
   const thresholdValue = round2(thresholdPointValue + threshold.cash);
   const totalReward = round2(product.saving + threshold.discount + store.value + thresholdValue + card.value + payment);
@@ -141,7 +142,7 @@ function renderCardFields() {
 
 function readForm() {
   return {
-    unitPrice: clamp(field('unitPrice'), 0), quantity: Math.max(1, Math.floor(clamp(field('quantity'), 1))),
+    storeId: field('store'), unitPrice: clamp(field('unitPrice'), 0), quantity: Math.max(1, Math.floor(clamp(field('quantity'), 1))),
     discount: { type: field('discountType'), rate: field('discountRate'), itemNumber: field('discountItemNumber'), groupSize: field('discountGroupSize'), bundleSize: field('bundleSize'), bundlePrice: field('bundlePrice'), threshold: field('productThreshold'), off: field('productOff'), repeat: field('productRepeat') === 'yes' },
     storePoints: { system: field('pointSystem'), method: field('storePointMethod'), rate: field('storeRate'), spendUnit: field('storeSpendUnit'), pointsUnit: field('storePointsUnit'), minimum: field('storeMinimum'), multiplier: field('storeMultiplier'), mode: field('multiplierMode'), pointValue: field('storePointValue') },
     threshold: { type: field('thresholdType'), threshold: field('thresholdAmount'), reward: field('thresholdReward'), repeat: field('thresholdRepeat') === 'yes', cap: nullableNumber('thresholdCap'), minimum: field('thresholdMinimum'), pointValue: field('thresholdPointValue') },
@@ -215,8 +216,8 @@ const PROMOTIONS = [
   {id:'cosmed-cathay-sat',storeId:'cosmed',title:'國泰世華週六滿額券',start:'2026-07-01',end:'2026-12-31',weekdays:[6],provider:'國泰世華',payment:'實體信用卡',kind:'coupon',threshold:988,value:100,repeat:false,cap:100,rewardText:'滿 $988 送 $100',note:'可搭配 CUBE 卡符合資格方案。'},
   {id:'cosmed-ctbc-sun',storeId:'cosmed',title:'uniopen 聯名卡週日滿額券',start:'2026-07-01',end:'2026-12-31',weekdays:[0],provider:'中國信託',payment:'實體信用卡',kind:'coupon',threshold:988,value:120,repeat:false,cap:120,rewardText:'滿 $988 送 $120',note:'限 uniopen 聯名卡；排除第三方支付。'},
   {id:'cosmed-cube-daily',storeId:'cosmed',title:'CUBE 卡樂饗購方案',start:null,end:null,weekdays:null,provider:'國泰世華 CUBE',payment:'實體信用卡',kind:'cardRate',value:2,rewardText:'2%～3.3% 小樹點',note:'依會員等級；目前安全預設套用 2%，排除第三方支付。'},
-  {id:'cosmed-icash-mon',storeId:'cosmed',title:'icash Pay 週一不限金額回饋',start:'2026-07-01',end:'2026-12-31',weekdays:[1],provider:'icash Pay',payment:'icash Pay',kind:'paymentRate',value:5,rewardText:'5% OPENPOINT',note:'每戶每月上限 200 點，須自行確認剩餘額度。'},
-  {id:'cosmed-icash-double',storeId:'cosmed',title:'icash Pay 月月雙喜日',start:'2026-07-01',end:'2026-12-31',days:[11,22],provider:'icash Pay',payment:'icash Pay',kind:'points',threshold:1111,value:100,repeat:false,cap:100,rewardText:'滿 $1,111 送 100 點',note:'限每月 11、22 日；每戶每日上限 200 點。'},
+  {id:'cosmed-icash-mon',storeId:'cosmed',title:'icash Pay 週一不限金額回饋',start:'2026-07-01',end:'2026-12-31',weekdays:[1],provider:'icash Pay',payment:'icash Pay',kind:'paymentRate',value:5,rewardText:'5% OPENPOINT',exclusiveWithCard:true,note:'每戶每月上限 200 點；不得與信用卡活動併用。'},
+  {id:'cosmed-icash-double',storeId:'cosmed',title:'icash Pay 月月雙喜日',start:'2026-07-01',end:'2026-12-31',days:[11,22],provider:'icash Pay',payment:'icash Pay',kind:'points',threshold:1111,value:100,repeat:false,cap:100,rewardText:'滿 $1,111 送 100 點',exclusiveWithCard:true,note:'限每月 11、22 日；不得與信用卡活動併用。'},
   {id:'seven-pickup-max20',storeId:'7-eleven',title:'行動隨時取綁指定銀行卡',start:'2026-07-01',end:'2026-09-30',provider:'行動隨時取',payment:'行動隨時取',kind:'paymentRate',value:20,rewardText:'最高 20% OPENPOINT',note:'指定銀行、組成與門檻尚待確認，不直接帶入計算。',infoOnly:true},
   {id:'seven-openwallet-300',storeId:'7-eleven',title:'OPEN錢包綁中信／國泰／玉山卡',start:'2026-07-01',end:'2026-09-30',provider:'OPEN錢包',payment:'OPEN錢包',kind:'paymentRate',threshold:300,value:10,rewardText:'滿 $300 回饋 10%',note:'各銀行每月上限 60～80 點；2026 年 8 月名額已額滿。',unavailableMonths:['2026-08']},
   {id:'seven-openwallet-200',storeId:'7-eleven',title:'OPEN錢包綁北富銀／兆豐卡',start:'2026-07-01',end:'2026-09-30',provider:'OPEN錢包',payment:'OPEN錢包',kind:'paymentRate',threshold:200,value:10,rewardText:'滿 $200 回饋 10%',note:'每戶每月上限 50 點；2026 年 8 月名額已額滿。',unavailableMonths:['2026-08']},
@@ -323,6 +324,10 @@ function renderCardPresets() {
 }
 
 function selectCard(cardId, shouldCalculate = true) {
+  if(cardId!=='none'&&field('store')==='cosmed'&&field('paymentType')==='icash Pay'){
+    document.getElementById('paymentType').value='none'; document.getElementById('paymentRate').value=0; document.getElementById('paymentMinimum').value=0; document.getElementById('paymentCap').value=''; appliedPromotionId='';
+    showRecordMessage('康是美 icash Pay 與信用卡活動不可併用，已切換為信用卡方案。');
+  }
   selectedCardId=cardId;
   const card=rules.cards.find(item=>item.id===cardId);
   document.getElementById('cardType').value=card?'cash':'none';
