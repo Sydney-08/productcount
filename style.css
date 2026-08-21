@@ -126,6 +126,9 @@ dd small { display:block; }
 .feedback-page { padding-block:24px 48px; }
 .feedback-card { width:min(100%,720px); margin-inline:auto; }
 .feedback-submit { width:100%; margin-top:16px; }
+.feedback-submit:disabled { opacity:.65; cursor:wait; }
+.feedback-status { min-height:24px; margin:10px 0 0; color:var(--brand); font-size:.88rem; font-weight:750; }
+.feedback-status.error-status { color:var(--danger); }
 .feedback-note { margin:18px 0 0; padding:12px; color:var(--muted); background:#f5f8f7; border-radius:10px; font-size:.8rem; }
 .feedback-note a { color:var(--brand); }
 .admin-page { padding-block:24px 48px; }

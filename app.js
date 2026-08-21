@@ -576,7 +576,7 @@ function showTab(id) {
   window.scrollTo({ top:0, behavior:'smooth' });
 }
 
-function submitFeedback(event) {
+async function submitFeedback(event) {
   event.preventDefault();
   const message = field('feedbackMessage').trim();
   const error = document.getElementById('feedbackError');
@@ -588,11 +588,20 @@ function submitFeedback(event) {
   }
   error.hidden = true;
   const name = field('feedbackName').trim() || '未提供';
-  const email = field('feedbackEmail').trim() || '未提供';
+  const email = field('feedbackEmail').trim();
   const type = field('feedbackType');
-  const subject = encodeURIComponent(`[優惠回饋計算 App] ${type}`);
-  const body = encodeURIComponent(`意見類型：${type}\n稱呼：${name}\n聯絡 Email：${email}\n\n回饋內容：\n${message}\n\n---\n由「這筆到底幾折？」網站送出`);
-  window.location.href = `mailto:fs7705417@gmail.com?subject=${subject}&body=${body}`;
+  const button=document.getElementById('feedbackSubmitBtn'),status=document.getElementById('feedbackStatus');
+  button.disabled=true; button.textContent='傳送中…'; status.textContent=''; status.classList.remove('error-status');
+  try {
+    const payload={name,type,message,_subject:`[優惠回饋計算 App] ${type}`,_template:'table'}; if(email)payload.email=email;
+    const response=await fetch('https://formsubmit.co/ajax/fs7705417@gmail.com',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify(payload)});
+    const result=await response.json().catch(()=>({}));
+    if(!response.ok||result.success===false)throw new Error(result.message||'send_failed');
+    status.textContent='意見已送出！若這是第一次使用，請管理者先到 Gmail 點擊 FormSubmit 啟用連結。';
+    document.getElementById('feedbackForm').reset(); document.getElementById('feedbackLength').textContent='0';
+  } catch(error) {
+    status.textContent='目前無法送出，請檢查網路後再試，或直接寄信至 fs7705417@gmail.com。'; status.classList.add('error-status');
+  } finally { button.disabled=false; button.textContent='送出意見'; }
 }
 
 function submitCalculation() {
