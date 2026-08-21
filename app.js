@@ -24,9 +24,11 @@ function calculateProductDiscount(unitPrice, quantity, discount) {
       const groups = Math.floor(qty / nth), remainder = qty % nth;
       discounted = groups * price * ((nth - 1) + rate) + remainder * price; break;
     }
-    case 'pairPercent': {
-      const pairs = Math.floor(qty / 2), remainder = qty % 2;
-      discounted = pairs * price * 2 * rate + remainder * price; break;
+    case 'pairPercent': // 相容舊版：視同 2 件整組折扣
+    case 'groupPercent': {
+      const groupSize = discount.type === 'pairPercent' ? 2 : Math.max(1, Math.floor(clamp(discount.groupSize, 1)));
+      const groups = Math.floor(qty / groupSize), remainder = qty % groupSize;
+      discounted = groups * price * groupSize * rate + remainder * price; break;
     }
     case 'bundleFixed': {
       const size = Math.max(1, Math.floor(clamp(discount.bundleSize, 1)));
@@ -120,8 +122,9 @@ function renderDiscountFields() {
   const box = document.getElementById('discountFields');
   const rate = '<label>折數（例如 5 代表 5 折）<input id="discountRate" type="number" min="0" max="10" step="0.01" value="5" inputmode="decimal"></label>';
   const map = {
-    percent: rate, pairPercent: rate,
+    percent: rate,
     nthPercent: '<label>第幾件 X<input id="discountItemNumber" type="number" min="1" step="1" value="2" inputmode="numeric"></label><label>該件折數 Y（例如 5 代表 5 折）<input id="discountRate" type="number" min="0" max="10" step="0.01" value="5" inputmode="decimal"></label>',
+    groupPercent: '<label>活動件數 X<input id="discountGroupSize" type="number" min="1" step="1" value="2" inputmode="numeric"></label><label>整組折數 Y（例如 8 代表 8 折）<input id="discountRate" type="number" min="0" max="10" step="0.01" value="8" inputmode="decimal"></label>',
     bundleFixed: '<label>活動件數 X<input id="bundleSize" type="number" min="1" step="1" value="3"></label><label>X 件固定價格（元）<input id="bundlePrice" type="number" min="0" step="0.01" value="999"></label>',
     thresholdOff: '<label>每滿金額（元）<input id="productThreshold" type="number" min="0.01" step="0.01" value="1000"></label><label>折抵金額（元）<input id="productOff" type="number" min="0" step="0.01" value="100"></label><label>是否累折<select id="productRepeat"><option value="no">否</option><option value="yes">是</option></select></label>',
     customOff: '<label>自訂折扣金額（元）<input id="productOff" type="number" min="0" step="0.01" value="100"></label>'
@@ -139,7 +142,7 @@ function renderCardFields() {
 function readForm() {
   return {
     unitPrice: clamp(field('unitPrice'), 0), quantity: Math.max(1, Math.floor(clamp(field('quantity'), 1))),
-    discount: { type: field('discountType'), rate: field('discountRate'), itemNumber: field('discountItemNumber'), bundleSize: field('bundleSize'), bundlePrice: field('bundlePrice'), threshold: field('productThreshold'), off: field('productOff'), repeat: field('productRepeat') === 'yes' },
+    discount: { type: field('discountType'), rate: field('discountRate'), itemNumber: field('discountItemNumber'), groupSize: field('discountGroupSize'), bundleSize: field('bundleSize'), bundlePrice: field('bundlePrice'), threshold: field('productThreshold'), off: field('productOff'), repeat: field('productRepeat') === 'yes' },
     storePoints: { system: field('pointSystem'), method: field('storePointMethod'), rate: field('storeRate'), spendUnit: field('storeSpendUnit'), pointsUnit: field('storePointsUnit'), minimum: field('storeMinimum'), multiplier: field('storeMultiplier'), mode: field('multiplierMode'), pointValue: field('storePointValue') },
     threshold: { type: field('thresholdType'), threshold: field('thresholdAmount'), reward: field('thresholdReward'), repeat: field('thresholdRepeat') === 'yes', cap: nullableNumber('thresholdCap'), minimum: field('thresholdMinimum'), pointValue: field('thresholdPointValue') },
     card: { type: field('cardType'), rate: field('cardRate'), cap: nullableNumber('cardCap'), spendUnit: field('cardSpendUnit'), pointsUnit: field('cardPointsUnit'), pointValue: field('cardPointValue') },
