@@ -255,6 +255,7 @@ const DEFAULT_RULES = {
 let rules = loadRules();
 let selectedCardId = 'none';
 let appliedPromotionId = '';
+const confirmedPromotionIds = new Set();
 
 function cloneDefaults() { return JSON.parse(JSON.stringify(DEFAULT_RULES)); }
 function loadRules() { if (typeof localStorage === 'undefined') return cloneDefaults(); try { const saved=JSON.parse(localStorage.getItem(RULES_STORAGE_KEY)); return saved?.stores?.length && saved?.cards ? saved : cloneDefaults(); } catch(error) { return cloneDefaults(); } }
@@ -358,20 +359,25 @@ function renderPromotionRecommendations() {
   const container=document.getElementById('promotionRecommendations'); if(!container)return;
   const date=field('purchaseDate'),storeId=field('store');
   const paid=currentCalculation?.paid ?? round2(clamp(field('unitPrice'),0)*Math.max(1,Math.floor(clamp(field('quantity'),1))));
-  const matches=PROMOTIONS.filter(promotion=>promotion.storeId===storeId&&promotionMatchesDate(promotion,date)).sort((a,b)=>Number(promotionUnavailable(a,date)||a.infoOnly)-Number(promotionUnavailable(b,date)||b.infoOnly)||promotionEstimatedValue(b,paid)-promotionEstimatedValue(a,paid));
+  const matches=PROMOTIONS.filter(promotion=>promotion.storeId===storeId&&promotionMatchesDate(promotion,date)).sort((a,b)=>Number(promotionUnavailable(a,date)||a.infoOnly&&!confirmedPromotionIds.has(a.id))-Number(promotionUnavailable(b,date)||b.infoOnly&&!confirmedPromotionIds.has(b.id))||promotionEstimatedValue(b,paid)-promotionEstimatedValue(a,paid));
   if(!matches.length){ container.innerHTML='<div class="promotion-empty">這個日期尚無已收錄的優惠。你仍可使用下方自訂欄位。</div>'; return; }
   container.innerHTML=matches.map((promotion,index)=>{
-    const unavailable=promotionUnavailable(promotion,date),estimated=unavailable||promotion.infoOnly?0:promotionEstimatedValue(promotion,paid),meets=!promotion.threshold||paid>=promotion.threshold;
-    const disabled=unavailable||promotion.infoOnly;
+    const unavailable=promotionUnavailable(promotion,date),confirmed=confirmedPromotionIds.has(promotion.id),estimated=unavailable||promotion.infoOnly&&!confirmed?0:promotionEstimatedValue(promotion,paid),meets=!promotion.threshold||paid>=promotion.threshold;
+    const disabled=unavailable;
     const applied=appliedPromotionId===promotion.id;
     const paymentRules=promotion.allowedPayments?.length?`<div class="payment-rules"><span class="allowed-rule">可用：${promotion.allowedPayments.map(escapeHtml).join('、')}</span>${promotion.excludedPayments?.length?`<span class="excluded-rule">不適用：${promotion.excludedPayments.map(escapeHtml).join('、')}</span>`:''}${promotion.fullPaymentRequired?'<span>須以同一張卡全額支付</span>':''}</div>`:'';
-    return `<article class="promotion-item ${index===0&&!disabled?'recommended':''} ${unavailable?'unavailable':''} ${applied?'applied':''}"><div class="promotion-top"><div><span class="promotion-provider">${escapeHtml(promotion.provider)}</span><h3>${escapeHtml(promotion.title)}</h3></div><div class="promotion-reward">${escapeHtml(promotion.rewardText)}</div></div><div class="promotion-meta"><span>${escapeHtml(promotion.payment)}</span><span>${promotion.start?`${promotion.start}～${promotion.end}`:'每日適用'}</span>${unavailable?'<span class="quota-full">本月額滿</span>':''}${promotion.infoOnly?'<span>資格待確認</span>':''}${promotion.threshold?`<span>${meets?'已達門檻':'差 '+money(promotion.threshold-paid)}</span>`:''}</div>${paymentRules}<div class="promotion-actions"><small>${escapeHtml(promotion.note)}${estimated?` 預估價值 ${money(estimated)}`:''}</small><button type="button" class="apply-promotion" data-promotion-id="${promotion.id}" ${disabled?'disabled':''}>${unavailable?'本月已額滿':promotion.infoOnly?'條件待確認':applied?'✓ 已套用':'一鍵套用'}</button></div></article>`;
+    return `<article class="promotion-item ${index===0&&!disabled?'recommended':''} ${unavailable?'unavailable':''} ${applied?'applied':''}"><div class="promotion-top"><div><span class="promotion-provider">${escapeHtml(promotion.provider)}</span><h3>${escapeHtml(promotion.title)}</h3></div><div class="promotion-reward">${escapeHtml(promotion.rewardText)}</div></div><div class="promotion-meta"><span>${escapeHtml(promotion.payment)}</span><span>${promotion.start?`${promotion.start}～${promotion.end}`:'每日適用'}</span>${unavailable?'<span class="quota-full">本月額滿</span>':''}${promotion.infoOnly&&!confirmed?'<span>資格待確認</span>':promotion.infoOnly&&confirmed?'<span>✓ 資格已確認</span>':''}${promotion.threshold?`<span>${meets?'已達門檻':'差 '+money(promotion.threshold-paid)}</span>`:''}</div>${paymentRules}<div class="promotion-actions"><small>${escapeHtml(promotion.note)}${estimated?` 預估價值 ${money(estimated)}`:''}</small><button type="button" class="apply-promotion" data-promotion-id="${promotion.id}" ${disabled?'disabled':''}>${unavailable?'本月已額滿':applied?'✓ 已套用':promotion.infoOnly&&!confirmed?'確認資格並套用':'一鍵套用'}</button></div></article>`;
   }).join('');
 }
 
 function applyPromotion(promotionId) {
   const promotion=PROMOTIONS.find(item=>item.id===promotionId); if(!promotion)return;
-  if(promotion.infoOnly||promotionUnavailable(promotion,field('purchaseDate')))return;
+  if(promotionUnavailable(promotion,field('purchaseDate')))return;
+  if(promotion.infoOnly&&!confirmedPromotionIds.has(promotion.id)){
+    const accepted=window.confirm(`此活動的完整資格尚待確認：\n\n${promotion.note}\n\n請確認你已查看官方活動規則、符合資格且仍有回饋名額。\n\n確定要以「${promotion.rewardText}」計入嗎？`);
+    if(!accepted)return;
+    confirmedPromotionIds.add(promotion.id);
+  }
   // 一鍵套用以單一方案為準，先清除上一個推薦方案，避免不同支付工具被錯誤疊加。
   document.getElementById('thresholdType').value='none'; document.getElementById('thresholdAmount').value=0; document.getElementById('thresholdReward').value=0; document.getElementById('thresholdCap').value=''; document.getElementById('thresholdMinimum').value=0;
   document.getElementById('paymentType').value='none'; document.getElementById('paymentRate').value=0; document.getElementById('paymentMinimum').value=0; document.getElementById('paymentCap').value=''; selectCard('none',false);
