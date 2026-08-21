@@ -44,6 +44,20 @@ input.invalid { border-color:var(--danger); }
 .card-icon { display:grid; place-items:center; width:34px; height:28px; margin-bottom:7px; color:#fff; background:var(--card-color,var(--brand)); border-radius:7px; font-size:.7rem; font-weight:900; }
 .card-preset strong,.card-preset small { display:block; }
 .card-preset small { color:var(--muted); }
+.promotion-list { display:grid; gap:10px; }
+.promotion-item { padding:14px; border:1px solid var(--line); border-radius:14px; }
+.promotion-item.recommended { border-color:#88b9ad; background:#f7fbfa; }
+.promotion-top { display:flex; justify-content:space-between; align-items:start; gap:12px; }
+.promotion-item h3 { margin:0; font-size:.98rem; }
+.promotion-provider { display:inline-block; margin-bottom:5px; padding:3px 7px; color:var(--brand-dark); background:var(--soft); border-radius:999px; font-size:.7rem; font-weight:800; }
+.promotion-reward { flex:0 0 auto; color:var(--brand); font-size:1.15rem; font-weight:900; }
+.promotion-meta { display:flex; gap:6px; flex-wrap:wrap; margin:9px 0; }
+.promotion-meta span { padding:3px 7px; color:var(--muted); background:#f0f3f5; border-radius:7px; font-size:.72rem; }
+.promotion-actions { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+.promotion-actions small { color:var(--muted); }
+.apply-promotion { padding:7px 12px; color:#fff; background:var(--brand); border:0; border-radius:8px; font-weight:750; cursor:pointer; }
+.promotion-empty { padding:22px; text-align:center; color:var(--muted); background:#f7f9fa; border-radius:12px; }
+.promotion-disclaimer { margin:12px 0 0; color:var(--muted); font-size:.75rem; }
 .error { padding:12px 14px; border-radius:10px; color:var(--danger); background:#fff0ee; font-weight:650; }
 .actions { position:sticky; bottom:0; z-index:2; display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:12px 0; background:linear-gradient(transparent,var(--bg) 22%); }
 .button { min-height:48px; border-radius:12px; border:1px solid var(--line); font-weight:800; cursor:pointer; }

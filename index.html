@@ -47,6 +47,7 @@
         <div class="section-heading"><span>2</span><div><h2>消費場所與店家點數</h2><p>倍數套用在基礎點數上</p></div></div>
         <div class="form-grid">
           <label class="wide">在哪裡買？<select id="store"></select></label>
+          <label class="wide">預計消費日期<input id="purchaseDate" type="date"><small>系統會依星期與活動期間推薦付款優惠</small></label>
           <div id="storePresetSummary" class="preset-summary wide"></div>
           <fieldset class="wide multiplier-picker"><legend>店家點數活動</legend><div id="multiplierOptions" class="choice-chips"><button type="button" data-multiplier="1">一般</button><button type="button" data-multiplier="2">2 倍</button><button type="button" data-multiplier="5">5 倍</button><button type="button" data-multiplier="10">10 倍</button><button type="button" data-multiplier="30">30 倍</button><button type="button" data-multiplier="custom">自訂</button></div></fieldset>
           <button type="button" id="toggleStoreAdvanced" class="wide advanced-toggle" aria-expanded="false">⚙️ 自訂點數規則</button>
@@ -60,6 +61,12 @@
           <label>倍數定義<select id="multiplierMode"><option value="total">基礎點數 × 倍數</option><option value="extra">額外增加（倍數－1）倍</option></select><small>兩種寫法總點數相同，明細會標示活動定義。</small></label>
           <label>1 點價值（元）<input id="storePointValue" type="number" min="0" step="0.01" value="1" inputmode="decimal"><small id="storeRuleNote">可自行設定店家點數規則。</small></label>
         </div>
+      </section>
+
+      <section class="card promotion-section">
+        <div class="section-heading"><span>推</span><div><h2>今天怎麼付最划算？</h2><p>已依店家、日期與目前金額整理可用活動</p></div></div>
+        <div id="promotionRecommendations" class="promotion-list"></div>
+        <p class="promotion-disclaimer">活動名額、排除商品與登錄狀態仍以官方現場或活動頁為準。</p>
       </section>
 
       <section class="card">
@@ -87,7 +94,7 @@
       <section class="card">
         <div class="section-heading"><span>5</span><div><h2>行動支付回饋</h2><p>可選填，以實際付款金額計算</p></div></div>
         <div class="form-grid">
-          <label>支付方式<select id="paymentType"><option value="none">無</option><option>LINE Pay</option><option>街口</option><option>Apple Pay</option><option>Google Pay</option><option>Samsung Pay</option><option>其他</option></select></label>
+          <label>支付方式<select id="paymentType"><option value="none">無</option><option>icash Pay</option><option>悠遊卡</option><option>實體信用卡</option><option>LINE Pay</option><option>街口</option><option>Apple Pay</option><option>Google Pay</option><option>Samsung Pay</option><option>其他</option></select></label>
           <label>回饋（%）<input id="paymentRate" type="number" min="0" max="100" step="0.01" value="0" inputmode="decimal"></label>
           <label>回饋上限（元，留空＝無）<input id="paymentCap" type="number" min="0" step="0.01" placeholder="無上限" inputmode="decimal"></label>
         </div>
