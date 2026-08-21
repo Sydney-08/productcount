@@ -166,7 +166,7 @@ function validateForm() {
 function addResult(label, value, className = '') { return `<div class="${className}"><dt>${label}</dt><dd>${value}</dd></div>`; }
 
 function renderResults(result, data) {
-  document.getElementById('effectiveCost').textContent = `等效成本 ${money(result.effectiveCost)}`;
+  document.getElementById('effectiveCost').textContent = `折算後價格 ${money(result.effectiveCost)}`;
   document.getElementById('effectiveDiscount').textContent = `約 ${numberText(result.effectiveDiscount)} 折`;
   document.getElementById('totalSaved').textContent = `總共省 ${money(result.totalReward)}`;
   document.getElementById('rewardRate').textContent = `總回饋率 ${numberText(result.rewardRate)}%`;
@@ -177,7 +177,7 @@ function renderResults(result, data) {
     addResult('滿額活動', `${result.threshold.points ? numberText(result.threshold.points) + ' 點 · ' : ''}價值 ${money(result.thresholdValue)}`) +
     addResult('信用卡回饋', result.card.points ? `${numberText(result.card.points)} 點<small>價值 ${money(result.card.value)}</small>` : money(result.card.value)) +
     addResult('支付回饋', money(result.payment)) + addResult('總回饋價值', money(result.totalReward), 'total-row') +
-    addResult('等效成本', money(result.effectiveCost), 'total-row');
+    addResult('折算後價格', money(result.effectiveCost), 'total-row');
 
   const baseRuleText = data.storePoints.method === 'rate' ? `${money(result.paid)} × ${numberText(data.storePoints.rate)}%` : `每 ${numberText(data.storePoints.spendUnit)} 元給 ${numberText(data.storePoints.pointsUnit)} 點`;
   const multiplierText = data.storePoints.mode === 'extra' ? `${baseRuleText}，基礎 ${numberText(result.store.base)} 點＋額外 ${numberText(result.store.total - result.store.base)} 點` : `${baseRuleText}＝${numberText(result.store.base)} 點，再 × ${numberText(data.storePoints.multiplier)}`;
@@ -192,7 +192,7 @@ function renderResults(result, data) {
     `信用卡：${cardText}`,
     `行動支付：${money(result.paid)} × ${numberText(data.payment.rate)}%（套用上限後）＝${money(result.payment)}`,
     `總回饋＝商品折扣＋滿額折扣＋各項回饋＝${money(result.totalReward)}`,
-    `等效成本＝${money(result.product.original)}－${money(result.totalReward)}＝${money(result.effectiveCost)}`
+    `折算後價格＝${money(result.product.original)}－${money(result.totalReward)}＝${money(result.effectiveCost)}`
   ].map(text => `<li>${text}</li>`).join('');
 }
 
@@ -515,7 +515,7 @@ function historyItem(record, type, bestId = '') {
     <div class="history-item-header"><div><h3>${escapeHtml(record.store)} · ${escapeHtml(record.card||'未記錄卡片')} · ${numberText(record.quantity)} 件${record.id===bestId?'<span class="best-badge">最划算</span>':''}</h3><time datetime="${record.createdAt}">${formatRecordDate(record.createdAt)}</time></div><button type="button" class="delete-record" data-delete-type="${type}" data-id="${record.id}" aria-label="刪除此筆紀錄">刪除</button></div>
     <div class="history-values">
       <div><span>${isPurchase ? '實際付款' : '原始總價'}</span><strong>${money(isPurchase ? record.paid : record.original)}</strong></div>
-      ${isPurchase ? `<div><span>等效成本</span><strong>${money(record.effectiveCost)}</strong></div>` : `<div><span>實際付款</span><strong>${money(record.paid)}</strong></div><div><span>總回饋價值</span><strong>${money(record.reward)}</strong></div><div><span>總回饋率</span><strong>${numberText(record.rewardRate)}%</strong></div>`}
+      ${isPurchase ? `<div><span>折算後價格</span><strong>${money(record.effectiveCost)}</strong></div>` : `<div><span>實際付款</span><strong>${money(record.paid)}</strong></div><div><span>總回饋價值</span><strong>${money(record.reward)}</strong></div><div><span>總回饋率</span><strong>${numberText(record.rewardRate)}%</strong></div>`}
     </div>
     ${isPurchase ? '' : `<div class="history-item-actions"><button type="button" class="confirm-record" data-confirm-id="${record.id}">確認買單並記錄</button></div>`}
   </article>`;
