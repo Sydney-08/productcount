@@ -486,6 +486,7 @@ function createCurrentRecord() {
   const selectedCard=rules.cards.find(card=>card.id===selectedCardId);
   return {
     id: recordId(), createdAt: new Date().toISOString(),
+    product: field('productName').trim() || '未命名商品',
     store: storeSelect.options[storeSelect.selectedIndex].text,
     card: selectedCard ? `${selectedCard.bank} ${selectedCard.name}` : '無信用卡',
     quantity: currentFormData.quantity,
@@ -505,46 +506,54 @@ function saveCurrentResult(type) {
   records.unshift(record);
   if (writeRecords(key, records)) {
     renderHistory();
-    showRecordMessage(type === 'purchase' ? `已記錄本次買單 ${money(record.paid)}` : '已儲存這次計算結果。');
+    showRecordMessage(type === 'purchase' ? `已記錄本次買單 ${money(record.paid)}` : '已加入購物車。');
   }
 }
 
-function historyItem(record, type, bestId = '') {
-  const isPurchase = type === 'purchase';
+function historyItem(record) {
   return `<article class="history-item">
-    <div class="history-item-header"><div><h3>${escapeHtml(record.store)} · ${escapeHtml(record.card||'未記錄卡片')} · ${numberText(record.quantity)} 件${record.id===bestId?'<span class="best-badge">最划算</span>':''}</h3><time datetime="${record.createdAt}">${formatRecordDate(record.createdAt)}</time></div><button type="button" class="delete-record" data-delete-type="${type}" data-id="${record.id}" aria-label="刪除此筆紀錄">刪除</button></div>
+    <div class="history-item-header"><div><h3>${escapeHtml(record.product||'未命名商品')}</h3><time datetime="${record.createdAt}">${formatRecordDate(record.createdAt)} · ${escapeHtml(record.store)} · ${escapeHtml(record.card||'未記錄卡片')}</time></div><button type="button" class="delete-record" data-delete-type="saved" data-id="${record.id}" aria-label="移除此商品">移除</button></div>
     <div class="history-values">
-      <div><span>${isPurchase ? '實際付款' : '原始總價'}</span><strong>${money(isPurchase ? record.paid : record.original)}</strong></div>
-      ${isPurchase ? `<div><span>折算後價格</span><strong>${money(record.effectiveCost)}</strong></div>` : `<div><span>實際付款</span><strong>${money(record.paid)}</strong></div><div><span>總回饋價值</span><strong>${money(record.reward)}</strong></div><div><span>總回饋率</span><strong>${numberText(record.rewardRate)}%</strong></div>`}
+      <div><span>數量</span><strong>${numberText(record.quantity)} 件</strong></div><div><span>原始總價</span><strong>${money(record.original)}</strong></div>
+      <div><span>實際付款</span><strong>${money(record.paid)}</strong></div><div><span>回饋價值</span><strong>${money(record.reward)}</strong></div>
     </div>
-    ${isPurchase ? '' : `<div class="history-item-actions"><button type="button" class="confirm-record" data-confirm-id="${record.id}">確認買單並記錄</button></div>`}
   </article>`;
 }
 
-function confirmSavedRecord(id) {
-  const source = readRecords(STORAGE_KEYS.saved).find(item => item.id === id);
-  if (!source) return;
+function checkoutCart() {
+  const items=readRecords(STORAGE_KEYS.saved); if(!items.length)return;
+  if(!window.confirm(`確定將購物車內 ${items.length} 個品項彙整成一筆訂單嗎？結帳後購物車會清空。`))return;
+  const total=property=>round2(items.reduce((sum,item)=>sum+clamp(item[property],0),0));
+  const original=total('original'),paid=total('paid'),reward=total('reward');
+  const order={id:recordId(),createdAt:new Date().toISOString(),items,totals:{original,paid,reward,effectiveCost:round2(original-reward)},stores:[...new Set(items.map(item=>item.store))]};
   const purchases = readRecords(STORAGE_KEYS.purchases);
-  purchases.unshift({ ...source, id:recordId(), createdAt:new Date().toISOString(), sourceRecordId:source.id });
+  purchases.unshift(order);
   if (writeRecords(STORAGE_KEYS.purchases, purchases)) {
-    renderHistory();
-    showTab('purchasePage');
+    writeRecords(STORAGE_KEYS.saved,[]); renderHistory(); showTab('purchasePage');
   }
+}
+
+function purchaseOrderItem(order) {
+  const legacy=!Array.isArray(order.items),items=legacy?[{...order,product:order.product||'舊版單品紀錄'}]:order.items;
+  const totals=legacy?{original:order.original||0,paid:order.paid||0,reward:order.reward||0,effectiveCost:order.effectiveCost||0}:order.totals;
+  return `<article class="history-item"><div class="history-item-header"><div><h3>訂單 · ${items.length} 個品項</h3><time datetime="${order.createdAt}">${formatRecordDate(order.createdAt)}</time></div><button type="button" class="delete-record" data-delete-type="purchase" data-id="${order.id}" aria-label="刪除此訂單">刪除訂單</button></div><div class="order-items">${items.map(item=>`<div class="order-line"><div><strong>${escapeHtml(item.product||'未命名商品')}</strong><br><span>${escapeHtml(item.store||'未記錄店家')} · ${numberText(item.quantity||1)} 件</span></div><strong>${money(item.paid||0)}</strong></div>`).join('')}</div><div class="history-values order-total"><div><span>原始總價</span><strong>${money(totals.original)}</strong></div><div><span>實際付款</span><strong>${money(totals.paid)}</strong></div><div><span>總回饋價值</span><strong>${money(totals.reward)}</strong></div><div><span>折算後價格</span><strong>${money(totals.effectiveCost)}</strong></div></div></article>`;
 }
 
 function renderHistory() {
   const saved = readRecords(STORAGE_KEYS.saved), purchases = readRecords(STORAGE_KEYS.purchases);
-  const bestId=saved.length ? saved.reduce((best,item)=>Number(item.rewardRate)>Number(best.rewardRate)?item:best).id : '';
   const sum = (records, property) => round2(records.reduce((total, item) => total + clamp(item[property], 0), 0));
+  const orderSum=property=>round2(purchases.reduce((total,order)=>total+clamp(order.totals?.[property]??order[property],0),0));
   document.getElementById('savedCount').textContent = saved.length;
   document.getElementById('purchaseCount').textContent = purchases.length;
   document.getElementById('savedTotalCount').textContent = saved.length;
   document.getElementById('savedPaidTotal').textContent = money(sum(saved, 'paid'));
   document.getElementById('savedRewardTotal').textContent = money(sum(saved, 'reward'));
+  document.getElementById('checkoutCartBtn').disabled = saved.length === 0;
   document.getElementById('purchaseTotalCount').textContent = purchases.length;
-  document.getElementById('purchasePaidTotal').textContent = money(sum(purchases, 'paid'));
-  document.getElementById('savedList').innerHTML = saved.length ? saved.map(item => historyItem(item, 'saved', bestId)).join('') : '<div class="empty-state">尚無計算紀錄。<br>完成計算後按「儲存計算結果」即可加入。</div>';
-  document.getElementById('purchaseList').innerHTML = purchases.length ? purchases.map(item => historyItem(item, 'purchase')).join('') : '<div class="empty-state">尚無買單紀錄。<br>確認購買時按「確認買單並記錄」。</div>';
+  document.getElementById('purchasePaidTotal').textContent = money(orderSum('paid'));
+  document.getElementById('purchaseRewardTotal').textContent = money(orderSum('reward'));
+  document.getElementById('savedList').innerHTML = saved.length ? saved.map(historyItem).join('') : '<div class="empty-state">購物車是空的。<br>完成計算後按「加入購物車」。</div>';
+  document.getElementById('purchaseList').innerHTML = purchases.length ? purchases.map(purchaseOrderItem).join('') : '<div class="empty-state">尚無訂單紀錄。<br>將購物車品項整筆確認買單後會顯示在這裡。</div>';
 }
 
 function deleteRecord(type, id) {
@@ -554,7 +563,7 @@ function deleteRecord(type, id) {
 }
 
 function clearRecords(type) {
-  const label = type === 'purchase' ? '買單紀錄' : '計算紀錄';
+  const label = type === 'purchase' ? '訂單紀錄' : '購物車';
   if (!readRecords(type === 'purchase' ? STORAGE_KEYS.purchases : STORAGE_KEYS.saved).length) return;
   if (!window.confirm(`確定要清除全部${label}嗎？此操作無法復原。`)) return;
   writeRecords(type === 'purchase' ? STORAGE_KEYS.purchases : STORAGE_KEYS.saved, []);
@@ -619,15 +628,14 @@ function init() {
   document.getElementById('exampleBtn').addEventListener('click',loadExample);
   document.getElementById('saveResultBtn').addEventListener('click',() => saveCurrentResult('saved'));
   document.getElementById('clearSavedBtn').addEventListener('click',() => clearRecords('saved'));
+  document.getElementById('checkoutCartBtn').addEventListener('click',checkoutCart);
   document.getElementById('clearPurchaseBtn').addEventListener('click',() => clearRecords('purchase'));
   document.querySelectorAll('.tab-button').forEach(button => button.addEventListener('click',() => showTab(button.dataset.tab)));
   document.getElementById('feedbackForm').addEventListener('submit',submitFeedback);
   document.getElementById('feedbackMessage').addEventListener('input',event => { document.getElementById('feedbackLength').textContent=event.target.value.length; });
   document.querySelectorAll('.history-list').forEach(list => list.addEventListener('click',event => {
     const deleteButton=event.target.closest('[data-delete-type]');
-    const confirmButton=event.target.closest('[data-confirm-id]');
     if(deleteButton) deleteRecord(deleteButton.dataset.deleteType,deleteButton.dataset.id);
-    else if(confirmButton) confirmSavedRecord(confirmButton.dataset.confirmId);
   }));
   document.getElementById('adminStoreSelect').addEventListener('change',loadStoreAdminForm);
   document.getElementById('adminCardSelect').addEventListener('change',loadCardAdminForm);

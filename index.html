@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="一次計算商品折扣、店家點數、信用卡與行動支付回饋。">
   <title>這筆到底幾折？</title>
-  <link rel="stylesheet" href="style.css?v=20260821-8">
+  <link rel="stylesheet" href="style.css?v=20260821-9">
 </head>
 <body>
   <header class="hero">
@@ -18,7 +18,7 @@
 
   <nav class="tabs shell" aria-label="主要功能">
     <button type="button" class="tab-button active" data-tab="calculatorPage">優惠計算</button>
-    <button type="button" class="tab-button" data-tab="savedPage">計算紀錄 <span id="savedCount">0</span></button>
+    <button type="button" class="tab-button" data-tab="savedPage">購物車 <span id="savedCount">0</span></button>
     <button type="button" class="tab-button" data-tab="purchasePage">買單紀錄 <span id="purchaseCount">0</span></button>
     <button type="button" class="tab-button" data-tab="feedbackPage">意見回饋</button>
     <button type="button" class="tab-button" data-tab="adminPage">規則管理</button>
@@ -29,6 +29,7 @@
       <section class="card">
         <div class="section-heading"><span>1</span><div><h2>商品與折扣</h2><p>輸入單件原價、數量與商品活動</p></div></div>
         <div class="form-grid">
+          <label class="wide">商品名稱（選填）<input id="productName" type="text" maxlength="80" placeholder="例如：保養品、咖啡、日用品"></label>
           <label>商品原價（元）<input id="unitPrice" type="number" min="0" step="0.01" value="599" inputmode="decimal" required></label>
           <label>商品數量<input id="quantity" type="number" min="1" step="1" value="1" inputmode="numeric" required></label>
           <label class="wide">商品折扣類型
@@ -110,7 +111,7 @@
       <section class="card result-card"><h2>計算結果</h2><dl id="resultList"></dl></section>
       <details class="card details-card" open><summary>計算明細</summary><ol id="breakdown"></ol></details>
       <div class="result-actions">
-        <button type="button" id="saveResultBtn" class="button secondary">儲存計算結果</button>
+        <button type="button" id="saveResultBtn" class="button secondary">加入購物車</button>
       </div>
       <p id="recordMessage" class="record-message" role="status" aria-live="polite"></p>
       <p class="result-note">回饋價值為估算；實際入點、進位與排除項目請依各活動規則為準。</p>
@@ -119,11 +120,11 @@
 
   <main id="savedPage" class="shell history-page tab-panel" hidden>
     <section class="history-summary">
-      <div><span>紀錄筆數</span><strong id="savedTotalCount">0</strong></div>
+      <div><span>購物車品項</span><strong id="savedTotalCount">0</strong></div>
       <div><span>付款金額合計</span><strong id="savedPaidTotal">$0</strong></div>
       <div><span>回饋價值合計</span><strong id="savedRewardTotal">$0</strong></div>
     </section>
-    <div class="history-heading"><div><h2>方案比較與計算紀錄</h2><p>儲存 2～4 個方案，系統會標出總回饋率最高的一筆</p></div><button type="button" id="clearSavedBtn" class="text-button danger">清除全部</button></div>
+    <div class="history-heading"><div><h2>購物車</h2><p>每次計算是一個品項，結帳後會彙整成一筆完整訂單</p></div><div class="cart-actions"><button type="button" id="checkoutCartBtn" class="button primary">整筆確認買單</button><button type="button" id="clearSavedBtn" class="text-button danger">清空購物車</button></div></div>
     <div id="savedList" class="history-list"></div>
   </main>
 
@@ -131,8 +132,9 @@
     <section class="history-summary purchase-summary">
       <div><span>買單筆數</span><strong id="purchaseTotalCount">0</strong></div>
       <div><span>實際付款總額</span><strong id="purchasePaidTotal">$0</strong></div>
+      <div><span>累計回饋價值</span><strong id="purchaseRewardTotal">$0</strong></div>
     </section>
-    <div class="history-heading"><div><h2>確定買單紀錄</h2><p>只記錄已確認購買的實際付款金額</p></div><button type="button" id="clearPurchaseBtn" class="text-button danger">清除全部</button></div>
+    <div class="history-heading"><div><h2>訂單紀錄</h2><p>每一筆包含該次結帳的所有購物車品項</p></div><button type="button" id="clearPurchaseBtn" class="text-button danger">清除全部</button></div>
     <div id="purchaseList" class="history-list"></div>
   </main>
 
@@ -180,6 +182,6 @@
       </section>
     </div>
   </main>
-  <script src="app.js?v=20260821-8"></script>
+  <script src="app.js?v=20260821-9"></script>
 </body>
 </html>
