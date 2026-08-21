@@ -21,6 +21,7 @@
     <button type="button" class="tab-button" data-tab="savedPage">計算紀錄 <span id="savedCount">0</span></button>
     <button type="button" class="tab-button" data-tab="purchasePage">買單紀錄 <span id="purchaseCount">0</span></button>
     <button type="button" class="tab-button" data-tab="feedbackPage">意見回饋</button>
+    <button type="button" class="tab-button" data-tab="adminPage">規則管理</button>
   </nav>
 
   <main id="calculatorPage" class="shell layout tab-panel active">
@@ -45,7 +46,10 @@
       <section class="card">
         <div class="section-heading"><span>2</span><div><h2>消費場所與店家點數</h2><p>倍數套用在基礎點數上</p></div></div>
         <div class="form-grid">
-          <label>消費場所<select id="store"><option value="cosmed">康是美</option><option value="7-eleven">7-ELEVEN</option><option value="watsons">屈臣氏</option><option value="poya">寶雅</option><option value="pxmart">全聯</option><option value="momo">momo</option><option value="shopee">蝦皮</option><option value="other" selected>其他</option></select></label>
+          <label class="wide">在哪裡買？<select id="store"></select></label>
+          <div id="storePresetSummary" class="preset-summary wide"></div>
+          <fieldset class="wide multiplier-picker"><legend>店家點數活動</legend><div id="multiplierOptions" class="choice-chips"><button type="button" data-multiplier="1">一般</button><button type="button" data-multiplier="2">2 倍</button><button type="button" data-multiplier="5">5 倍</button><button type="button" data-multiplier="10">10 倍</button><button type="button" data-multiplier="30">30 倍</button><button type="button" data-multiplier="custom">自訂</button></div></fieldset>
+          <button type="button" id="toggleStoreAdvanced" class="wide advanced-toggle" aria-expanded="false">⚙️ 自訂點數規則</button>
           <label>點數系統<input id="pointSystem" type="text" value="自訂點數" maxlength="30"></label>
           <label>基礎點數計算方式<select id="storePointMethod"><option value="unit">每 X 元給 Y 點</option><option value="rate">依結帳金額回饋率</option></select></label>
           <label id="storeRateLabel">基礎回饋率（%）<input id="storeRate" type="number" min="0" max="100" step="0.01" value="0.33" inputmode="decimal"></label>
@@ -73,6 +77,9 @@
 
       <section class="card">
         <div class="section-heading"><span>4</span><div><h2>信用卡回饋</h2><p>以實際刷卡金額計算</p></div></div>
+        <div id="cardPresetGrid" class="card-preset-grid"></div>
+        <div id="selectedCardSummary" class="preset-summary"></div>
+        <button type="button" id="toggleCardAdvanced" class="advanced-toggle" aria-expanded="false">⚙️ 自訂信用卡回饋</button>
         <label>信用卡回饋類型<select id="cardType"><option value="none">無信用卡回饋</option><option value="cash">現金回饋</option><option value="points">信用卡點數</option></select></label>
         <div id="cardFields" class="conditional-box" aria-live="polite"></div>
       </section>
@@ -91,7 +98,7 @@
     </form>
 
     <aside id="results" class="results" aria-live="polite">
-      <div class="result-hero"><p>等效成本</p><strong id="effectiveCost">$0</strong><div><span id="effectiveDiscount">約 0 折</span><span id="rewardRate">總回饋率 0%</span></div></div>
+      <div class="result-hero"><p>這筆等效</p><strong id="effectiveDiscount">約 0 折</strong><div><span id="totalSaved">總共省 $0</span><span id="effectiveCost">等效成本 $0</span><span id="rewardRate">總回饋率 0%</span></div></div>
       <section class="card result-card"><h2>計算結果</h2><dl id="resultList"></dl></section>
       <details class="card details-card" open><summary>計算明細</summary><ol id="breakdown"></ol></details>
       <div class="result-actions">
@@ -108,7 +115,7 @@
       <div><span>付款金額合計</span><strong id="savedPaidTotal">$0</strong></div>
       <div><span>回饋價值合計</span><strong id="savedRewardTotal">$0</strong></div>
     </section>
-    <div class="history-heading"><div><h2>計算紀錄</h2><p>儲存想比較或稍後查看的計算結果</p></div><button type="button" id="clearSavedBtn" class="text-button danger">清除全部</button></div>
+    <div class="history-heading"><div><h2>方案比較與計算紀錄</h2><p>儲存 2～4 個方案，系統會標出總回饋率最高的一筆</p></div><button type="button" id="clearSavedBtn" class="text-button danger">清除全部</button></div>
     <div id="savedList" class="history-list"></div>
   </main>
 
@@ -136,6 +143,34 @@
       </form>
       <p class="feedback-note">按下後會開啟裝置的預設寄信程式，收件人為 <a href="mailto:fs7705417@gmail.com">fs7705417@gmail.com</a>。網站不會儲存你的回饋內容。</p>
     </section>
+  </main>
+  <main id="adminPage" class="shell admin-page tab-panel" hidden>
+    <div class="admin-intro"><div><p class="eyebrow">本機管理工具</p><h2>店家與信用卡規則</h2><p>修改後立即套用到這台裝置。若要同步給所有訪客，未來需接雲端資料庫與管理員登入。</p></div><div class="admin-tools"><button type="button" id="exportRulesBtn" class="button secondary">匯出規則</button><label class="button secondary file-button">匯入規則<input id="importRulesInput" type="file" accept="application/json" hidden></label><button type="button" id="resetRulesBtn" class="text-button danger">恢復預設</button></div></div>
+    <div class="admin-grid">
+      <section class="card">
+        <div class="section-heading"><span>店</span><div><h2>店家點數規則</h2><p>選店後自動帶入計算</p></div></div>
+        <form id="storeRuleForm" class="form-grid">
+          <label class="wide">選擇店家<select id="adminStoreSelect"></select></label>
+          <label>店家名稱<input id="adminStoreName" type="text" required maxlength="40"></label><label>圖示文字<input id="adminStoreIcon" type="text" maxlength="3"></label>
+          <label>點數系統<input id="adminPointSystem" type="text" maxlength="40"></label><label>計算方式<select id="adminStoreMethod"><option value="rate">消費回饋率</option><option value="unit">每 X 元給 Y 點</option></select></label>
+          <label>基礎回饋率（%）<input id="adminStoreRate" type="number" min="0" max="100" step="0.01"></label><label>每多少元<input id="adminSpendUnit" type="number" min="0.01" step="0.01"></label>
+          <label>每單位點數<input id="adminPointsUnit" type="number" min="0" step="0.01"></label><label>最低計點消費<input id="adminStoreMinimum" type="number" min="0" step="0.01"></label>
+          <label>1 點價值（元）<input id="adminStorePointValue" type="number" min="0" step="0.001"></label>
+          <button type="submit" class="button primary wide">儲存店家規則</button>
+        </form>
+      </section>
+      <section class="card">
+        <div class="section-heading"><span>卡</span><div><h2>信用卡規則</h2><p>基本回饋＋指定店家加碼</p></div></div>
+        <form id="cardRuleForm" class="form-grid">
+          <label class="wide">選擇卡片<select id="adminCardSelect"></select></label>
+          <label>銀行名稱<input id="adminCardBank" type="text" required maxlength="40"></label><label>卡片名稱<input id="adminCardName" type="text" required maxlength="50"></label>
+          <label>圖示文字<input id="adminCardIcon" type="text" maxlength="3"></label><label>卡片顏色<input id="adminCardColor" type="color"></label>
+          <label>基本回饋率（%）<input id="adminCardRate" type="number" min="0" max="100" step="0.01"></label><label>回饋上限（留空＝無）<input id="adminCardCap" type="number" min="0" step="0.01"></label>
+          <label>指定加碼店家<select id="adminCardStore"></select></label><label>該店家總回饋率（%）<input id="adminCardStoreRate" type="number" min="0" max="100" step="0.01"></label>
+          <div class="wide admin-form-actions"><button type="submit" class="button primary">儲存卡片</button><button type="button" id="newCardBtn" class="button secondary">新增卡片</button><button type="button" id="deleteCardBtn" class="text-button danger">刪除此卡</button></div>
+        </form>
+      </section>
+    </div>
   </main>
   <script src="app.js"></script>
 </body>

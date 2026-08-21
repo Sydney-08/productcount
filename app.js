@@ -159,8 +159,9 @@ function validateForm() {
 function addResult(label, value, className = '') { return `<div class="${className}"><dt>${label}</dt><dd>${value}</dd></div>`; }
 
 function renderResults(result, data) {
-  document.getElementById('effectiveCost').textContent = money(result.effectiveCost);
+  document.getElementById('effectiveCost').textContent = `等效成本 ${money(result.effectiveCost)}`;
   document.getElementById('effectiveDiscount').textContent = `約 ${numberText(result.effectiveDiscount)} 折`;
+  document.getElementById('totalSaved').textContent = `總共省 ${money(result.totalReward)}`;
   document.getElementById('rewardRate').textContent = `總回饋率 ${numberText(result.rewardRate)}%`;
   document.getElementById('resultList').innerHTML =
     addResult('原始總價', money(result.product.original)) + addResult('商品折扣', `-${money(result.product.saving)}`) +
@@ -198,10 +199,31 @@ function loadExample() {
   submitCalculation();
 }
 
-const STORE_PRESETS = {
-  cosmed: { system:'OPENPOINT', method:'rate', rate:.33, minimum:2, pointValue:1, note:'一般會員：實付滿 2 元起，回饋 0.33%；點數取至小數第 2 位。' },
-  '7-eleven': { system:'OPENPOINT', method:'rate', rate:.33, minimum:2, pointValue:1, note:'OPENPOINT：實付滿 2 元起，回饋 0.33%；點數取至小數第 2 位。' }
+const RULES_STORAGE_KEY = 'discount-calculator-rules-v2';
+const DEFAULT_RULES = {
+  stores: [
+    { id:'cosmed', name:'康是美', icon:'康', system:'OPENPOINT', method:'rate', rate:.33, spendUnit:1, pointsUnit:1, minimum:2, pointValue:1, note:'一般會員實付滿 2 元起，回饋 0.33%。' },
+    { id:'7-eleven', name:'7-ELEVEN', icon:'7', system:'OPENPOINT', method:'rate', rate:.33, spendUnit:1, pointsUnit:1, minimum:2, pointValue:1, note:'OPENPOINT 實付滿 2 元起，回饋 0.33%。' },
+    { id:'family', name:'全家', icon:'全', system:'全家會員點數', method:'unit', rate:0, spendUnit:1, pointsUnit:1, minimum:1, pointValue:1/300, note:'預設為每 1 元 1 點、300 點折 1 元，可在後台調整。' },
+    { id:'watsons', name:'屈臣氏', icon:'屈', system:'自訂點數', method:'unit', rate:0, spendUnit:1, pointsUnit:0, minimum:0, pointValue:1, note:'尚未設定官方規則，請由規則管理維護。' },
+    { id:'poya', name:'寶雅', icon:'寶', system:'自訂點數', method:'unit', rate:0, spendUnit:1, pointsUnit:0, minimum:0, pointValue:1, note:'尚未設定官方規則，請由規則管理維護。' },
+    { id:'pxmart', name:'全聯', icon:'聯', system:'自訂點數', method:'unit', rate:0, spendUnit:1, pointsUnit:0, minimum:0, pointValue:1, note:'尚未設定官方規則，請由規則管理維護。' },
+    { id:'momo', name:'momo', icon:'m', system:'自訂點數', method:'unit', rate:0, spendUnit:1, pointsUnit:0, minimum:0, pointValue:1, note:'尚未設定官方規則，請由規則管理維護。' },
+    { id:'shopee', name:'蝦皮', icon:'蝦', system:'自訂點數', method:'unit', rate:0, spendUnit:1, pointsUnit:0, minimum:0, pointValue:1, note:'尚未設定官方規則，請由規則管理維護。' },
+    { id:'other', name:'其他', icon:'其', system:'自訂點數', method:'unit', rate:0, spendUnit:1, pointsUnit:0, minimum:0, pointValue:1, note:'可展開進階設定自行輸入。' }
+  ],
+  cards: [
+    { id:'cube', bank:'國泰世華', name:'CUBE 卡', icon:'CUBE', color:'#176b5b', rate:0, cap:null, storeId:'', storeRate:null },
+    { id:'unicard', bank:'玉山銀行', name:'Unicard', icon:'玉山', color:'#008d83', rate:0, cap:null, storeId:'', storeRate:null },
+    { id:'richart', bank:'台新銀行', name:'Richart 卡', icon:'R', color:'#e6427a', rate:0, cap:null, storeId:'', storeRate:null }
+  ]
 };
+let rules = loadRules();
+let selectedCardId = 'none';
+
+function cloneDefaults() { return JSON.parse(JSON.stringify(DEFAULT_RULES)); }
+function loadRules() { if (typeof localStorage === 'undefined') return cloneDefaults(); try { const saved=JSON.parse(localStorage.getItem(RULES_STORAGE_KEY)); return saved?.stores?.length && saved?.cards ? saved : cloneDefaults(); } catch(error) { return cloneDefaults(); } }
+function saveRules() { if (typeof localStorage !== 'undefined') localStorage.setItem(RULES_STORAGE_KEY,JSON.stringify(rules)); }
 
 function updateStoreMethodFields() {
   const isRate = field('storePointMethod') === 'rate';
@@ -212,15 +234,20 @@ function updateStoreMethodFields() {
 
 // 選擇已知店家時自動帶入點數制度；其他店家仍可自由修改。
 function applyStorePreset() {
-  const preset = STORE_PRESETS[field('store')];
+  const preset = rules.stores.find(item => item.id === field('store'));
   if (preset) {
     document.getElementById('pointSystem').value = preset.system;
     document.getElementById('storePointMethod').value = preset.method;
     document.getElementById('storeRate').value = preset.rate;
+    document.getElementById('storeSpendUnit').value = preset.spendUnit;
+    document.getElementById('storePointsUnit').value = preset.pointsUnit;
     document.getElementById('storeMinimum').value = preset.minimum;
     document.getElementById('storePointValue').value = preset.pointValue;
     document.getElementById('storeMultiplier').value = 1;
     document.getElementById('storeRuleNote').textContent = preset.note;
+    const ruleText = preset.method === 'rate' ? `基本回饋 ${numberText(preset.rate)}%` : `每 ${numberText(preset.spendUnit)} 元 ${numberText(preset.pointsUnit)} 點`;
+    const pointValueText=Number(preset.pointValue)<.01 ? `$${Number(preset.pointValue).toFixed(4)}` : money(preset.pointValue);
+    document.getElementById('storePresetSummary').innerHTML = `<strong>${escapeHtml(preset.system)}</strong> · ${ruleText} · 1 點＝${pointValueText}`;
   } else {
     document.getElementById('pointSystem').value = '自訂點數';
     document.getElementById('storePointMethod').value = 'unit';
@@ -231,7 +258,95 @@ function applyStorePreset() {
     document.getElementById('storeMultiplier').value = 1;
     document.getElementById('storeRuleNote').textContent = '可自行設定店家點數規則。';
   }
-  updateStoreMethodFields();
+  updateStoreMethodFields(); updateMultiplierButtons(); renderCardPresets();
+}
+
+function renderStoreOptions() {
+  const options = rules.stores.map(store => `<option value="${store.id}">${escapeHtml(store.name)}</option>`).join('');
+  ['store','adminStoreSelect','adminCardStore'].forEach(id => {
+    const select=document.getElementById(id), previous=select.value;
+    select.innerHTML = id === 'adminCardStore' ? `<option value="">無指定店家</option>${options}` : options;
+    if ([...select.options].some(option => option.value === previous)) select.value=previous;
+  });
+}
+
+function updateMultiplierButtons() {
+  const value=Number(field('storeMultiplier'));
+  document.querySelectorAll('[data-multiplier]').forEach(button => button.classList.toggle('active', Number(button.dataset.multiplier) === value || (button.dataset.multiplier === 'custom' && ![1,2,5,10,30].includes(value))));
+}
+
+function effectiveCardRate(card, storeId) { return card.storeId === storeId && card.storeRate !== null && card.storeRate !== '' ? clamp(card.storeRate,0,100) : clamp(card.rate,0,100); }
+
+function renderCardPresets() {
+  const storeId=field('store');
+  const none=`<button type="button" class="card-preset ${selectedCardId==='none'?'active':''}" data-card-id="none"><span class="card-icon" style="--card-color:#8a949c">無</span><strong>不使用信用卡</strong><small>0% 回饋</small></button>`;
+  document.getElementById('cardPresetGrid').innerHTML = none + rules.cards.map(card => {
+    const rate=effectiveCardRate(card,storeId), matched=card.storeId===storeId && card.storeRate!==null && card.storeRate!=='';
+    return `<button type="button" class="card-preset ${selectedCardId===card.id?'active':''}" data-card-id="${card.id}"><span class="card-icon" style="--card-color:${card.color}">${escapeHtml(card.icon)}</span><strong>${escapeHtml(card.name)}</strong><small>${escapeHtml(card.bank)} · ${numberText(rate)}%${matched?' 店家加碼':''}</small></button>`;
+  }).join('');
+  const card=rules.cards.find(item=>item.id===selectedCardId);
+  document.getElementById('selectedCardSummary').innerHTML=card ? `<strong>${escapeHtml(card.bank)} ${escapeHtml(card.name)}</strong> · 本次自動套用 ${numberText(effectiveCardRate(card,storeId))}%${card.cap!==null&&card.cap!==''?`，上限 ${money(card.cap)}`:''}` : '未使用信用卡回饋';
+}
+
+function selectCard(cardId) {
+  selectedCardId=cardId;
+  const card=rules.cards.find(item=>item.id===cardId);
+  document.getElementById('cardType').value=card?'cash':'none';
+  renderCardFields();
+  if(card){ document.getElementById('cardRate').value=effectiveCardRate(card,field('store')); document.getElementById('cardCap').value=card.cap??''; }
+  renderCardPresets(); submitCalculation();
+}
+
+function refreshAdminSelects() {
+  renderStoreOptions();
+  const cardSelect=document.getElementById('adminCardSelect'), previous=cardSelect.value;
+  cardSelect.innerHTML=rules.cards.map(card=>`<option value="${card.id}">${escapeHtml(card.bank)}｜${escapeHtml(card.name)}</option>`).join('');
+  if(rules.cards.some(card=>card.id===previous)) cardSelect.value=previous;
+  loadStoreAdminForm(); loadCardAdminForm();
+}
+
+function loadStoreAdminForm() {
+  const store=rules.stores.find(item=>item.id===field('adminStoreSelect')) || rules.stores[0]; if(!store)return;
+  const values={adminStoreName:store.name,adminStoreIcon:store.icon,adminPointSystem:store.system,adminStoreMethod:store.method,adminStoreRate:store.rate,adminSpendUnit:store.spendUnit,adminPointsUnit:store.pointsUnit,adminStoreMinimum:store.minimum,adminStorePointValue:store.pointValue};
+  Object.entries(values).forEach(([id,value])=>document.getElementById(id).value=value);
+}
+
+function saveStoreAdminForm(event) {
+  event.preventDefault(); const store=rules.stores.find(item=>item.id===field('adminStoreSelect')); if(!store)return;
+  Object.assign(store,{name:field('adminStoreName').trim(),icon:field('adminStoreIcon').trim()||'店',system:field('adminPointSystem').trim()||'自訂點數',method:field('adminStoreMethod'),rate:clamp(field('adminStoreRate'),0,100),spendUnit:clamp(field('adminSpendUnit'),.01),pointsUnit:clamp(field('adminPointsUnit'),0),minimum:clamp(field('adminStoreMinimum'),0),pointValue:clamp(field('adminStorePointValue'),0),note:'由規則管理設定。'});
+  saveRules(); refreshAdminSelects(); applyStorePreset(); alert('店家規則已儲存並套用。');
+}
+
+function loadCardAdminForm() {
+  const card=rules.cards.find(item=>item.id===field('adminCardSelect')) || rules.cards[0];
+  if(!card){ ['adminCardBank','adminCardName','adminCardIcon','adminCardRate','adminCardCap','adminCardStore','adminCardStoreRate'].forEach(id=>document.getElementById(id).value=''); return; }
+  const values={adminCardBank:card.bank,adminCardName:card.name,adminCardIcon:card.icon,adminCardColor:card.color,adminCardRate:card.rate,adminCardCap:card.cap??'',adminCardStore:card.storeId||'',adminCardStoreRate:card.storeRate??''};
+  Object.entries(values).forEach(([id,value])=>document.getElementById(id).value=value);
+}
+
+function saveCardAdminForm(event) {
+  event.preventDefault(); let card=rules.cards.find(item=>item.id===field('adminCardSelect'));
+  if(!card){ card={id:`card-${Date.now()}`}; rules.cards.push(card); }
+  Object.assign(card,{bank:field('adminCardBank').trim(),name:field('adminCardName').trim(),icon:field('adminCardIcon').trim()||'卡',color:field('adminCardColor')||'#176b5b',rate:clamp(field('adminCardRate'),0,100),cap:nullableNumber('adminCardCap'),storeId:field('adminCardStore'),storeRate:nullableNumber('adminCardStoreRate')});
+  saveRules(); refreshAdminSelects(); document.getElementById('adminCardSelect').value=card.id; renderCardPresets(); alert('信用卡規則已儲存並套用。');
+}
+
+function newCard() {
+  const card={id:`card-${Date.now()}`,bank:'新銀行',name:'新信用卡',icon:'新',color:'#176b5b',rate:0,cap:null,storeId:'',storeRate:null}; rules.cards.push(card); saveRules(); refreshAdminSelects(); document.getElementById('adminCardSelect').value=card.id; loadCardAdminForm();
+}
+
+function deleteAdminCard() {
+  const id=field('adminCardSelect'); if(!id||!confirm('確定刪除這張信用卡規則？'))return;
+  rules.cards=rules.cards.filter(card=>card.id!==id); if(selectedCardId===id)selectedCardId='none'; saveRules(); refreshAdminSelects(); renderCardPresets();
+}
+
+function exportRules() {
+  const blob=new Blob([JSON.stringify(rules,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),link=document.createElement('a'); link.href=url; link.download='productcount-rules.json'; link.click(); URL.revokeObjectURL(url);
+}
+
+function importRules(event) {
+  const file=event.target.files[0]; if(!file)return; const reader=new FileReader();
+  reader.onload=()=>{ try { const incoming=JSON.parse(reader.result); if(!incoming.stores?.length||!Array.isArray(incoming.cards))throw new Error(); rules=incoming; saveRules(); refreshAdminSelects(); applyStorePreset(); alert('規則匯入完成。'); } catch(error){ alert('檔案格式不正確。'); } event.target.value=''; }; reader.readAsText(file);
 }
 
 const STORAGE_KEYS = { saved: 'discount-calculator-saved-v1', purchases: 'discount-calculator-purchases-v1' };
@@ -261,9 +376,11 @@ function showRecordMessage(message, isError = false) {
 function createCurrentRecord() {
   if (!currentCalculation || !currentFormData) return null;
   const storeSelect = document.getElementById('store');
+  const selectedCard=rules.cards.find(card=>card.id===selectedCardId);
   return {
     id: recordId(), createdAt: new Date().toISOString(),
     store: storeSelect.options[storeSelect.selectedIndex].text,
+    card: selectedCard ? `${selectedCard.bank} ${selectedCard.name}` : '無信用卡',
     quantity: currentFormData.quantity,
     original: currentCalculation.product.original,
     paid: currentCalculation.paid,
@@ -285,10 +402,10 @@ function saveCurrentResult(type) {
   }
 }
 
-function historyItem(record, type) {
+function historyItem(record, type, bestId = '') {
   const isPurchase = type === 'purchase';
   return `<article class="history-item">
-    <div class="history-item-header"><div><h3>${escapeHtml(record.store)} · ${numberText(record.quantity)} 件</h3><time datetime="${record.createdAt}">${formatRecordDate(record.createdAt)}</time></div><button type="button" class="delete-record" data-delete-type="${type}" data-id="${record.id}" aria-label="刪除此筆紀錄">刪除</button></div>
+    <div class="history-item-header"><div><h3>${escapeHtml(record.store)} · ${escapeHtml(record.card||'未記錄卡片')} · ${numberText(record.quantity)} 件${record.id===bestId?'<span class="best-badge">最划算</span>':''}</h3><time datetime="${record.createdAt}">${formatRecordDate(record.createdAt)}</time></div><button type="button" class="delete-record" data-delete-type="${type}" data-id="${record.id}" aria-label="刪除此筆紀錄">刪除</button></div>
     <div class="history-values">
       <div><span>${isPurchase ? '實際付款' : '原始總價'}</span><strong>${money(isPurchase ? record.paid : record.original)}</strong></div>
       ${isPurchase ? `<div><span>等效成本</span><strong>${money(record.effectiveCost)}</strong></div>` : `<div><span>實際付款</span><strong>${money(record.paid)}</strong></div><div><span>總回饋價值</span><strong>${money(record.reward)}</strong></div><div><span>總回饋率</span><strong>${numberText(record.rewardRate)}%</strong></div>`}
@@ -310,6 +427,7 @@ function confirmSavedRecord(id) {
 
 function renderHistory() {
   const saved = readRecords(STORAGE_KEYS.saved), purchases = readRecords(STORAGE_KEYS.purchases);
+  const bestId=saved.length ? saved.reduce((best,item)=>Number(item.rewardRate)>Number(best.rewardRate)?item:best).id : '';
   const sum = (records, property) => round2(records.reduce((total, item) => total + clamp(item[property], 0), 0));
   document.getElementById('savedCount').textContent = saved.length;
   document.getElementById('purchaseCount').textContent = purchases.length;
@@ -318,7 +436,7 @@ function renderHistory() {
   document.getElementById('savedRewardTotal').textContent = money(sum(saved, 'reward'));
   document.getElementById('purchaseTotalCount').textContent = purchases.length;
   document.getElementById('purchasePaidTotal').textContent = money(sum(purchases, 'paid'));
-  document.getElementById('savedList').innerHTML = saved.length ? saved.map(item => historyItem(item, 'saved')).join('') : '<div class="empty-state">尚無計算紀錄。<br>完成計算後按「儲存計算結果」即可加入。</div>';
+  document.getElementById('savedList').innerHTML = saved.length ? saved.map(item => historyItem(item, 'saved', bestId)).join('') : '<div class="empty-state">尚無計算紀錄。<br>完成計算後按「儲存計算結果」即可加入。</div>';
   document.getElementById('purchaseList').innerHTML = purchases.length ? purchases.map(item => historyItem(item, 'purchase')).join('') : '<div class="empty-state">尚無買單紀錄。<br>確認購買時按「確認買單並記錄」。</div>';
 }
 
@@ -368,12 +486,25 @@ function submitCalculation() {
   renderResults(currentCalculation,currentFormData);
 }
 
+function toggleAdvanced(kind, forceOpen) {
+  const isStore=kind==='store', button=document.getElementById(isStore?'toggleStoreAdvanced':'toggleCardAdvanced');
+  const ids=isStore ? ['pointSystem','storePointMethod','storeRate','storeSpendUnit','storePointsUnit','storeMinimum','storeMultiplier','multiplierMode','storePointValue'] : ['cardType','cardFields'];
+  const open=forceOpen===undefined ? button.getAttribute('aria-expanded')!=='true' : forceOpen;
+  button.setAttribute('aria-expanded',String(open)); button.textContent=open ? '收起進階設定' : (isStore?'⚙️ 自訂點數規則':'⚙️ 自訂信用卡回饋');
+  ids.forEach(id=>{ const el=document.getElementById(id); const target=id==='cardFields'?el:el?.closest('label'); if(target)target.classList.toggle('advanced-field-hidden',!open); });
+}
+
 function init() {
-  renderDiscountFields(); renderCardFields(); updateStoreMethodFields();
+  renderStoreOptions(); renderDiscountFields(); renderCardFields(); updateStoreMethodFields(); refreshAdminSelects(); applyStorePreset(); renderCardPresets();
   document.getElementById('discountType').addEventListener('change',renderDiscountFields);
-  document.getElementById('cardType').addEventListener('change',renderCardFields);
-  document.getElementById('store').addEventListener('change',applyStorePreset);
+  document.getElementById('cardType').addEventListener('change',()=>{ selectedCardId='none'; renderCardFields(); renderCardPresets(); });
+  document.getElementById('store').addEventListener('change',()=>{ applyStorePreset(); if(selectedCardId!=='none')selectCard(selectedCardId); else submitCalculation(); });
   document.getElementById('storePointMethod').addEventListener('change',updateStoreMethodFields);
+  document.getElementById('multiplierOptions').addEventListener('click',event=>{ const button=event.target.closest('[data-multiplier]'); if(!button)return; if(button.dataset.multiplier==='custom'){ toggleAdvanced('store',true); document.getElementById('storeMultiplier').focus(); return; } document.getElementById('storeMultiplier').value=button.dataset.multiplier; updateMultiplierButtons(); submitCalculation(); });
+  document.getElementById('storeMultiplier').addEventListener('input',updateMultiplierButtons);
+  document.getElementById('cardPresetGrid').addEventListener('click',event=>{ const button=event.target.closest('[data-card-id]'); if(button)selectCard(button.dataset.cardId); });
+  document.getElementById('toggleStoreAdvanced').addEventListener('click',()=>toggleAdvanced('store'));
+  document.getElementById('toggleCardAdvanced').addEventListener('click',()=>toggleAdvanced('card'));
   document.getElementById('calculatorForm').addEventListener('submit',event => { event.preventDefault(); submitCalculation(); document.getElementById('results').scrollIntoView({behavior:'smooth',block:'start'}); });
   document.getElementById('exampleBtn').addEventListener('click',loadExample);
   document.getElementById('saveResultBtn').addEventListener('click',() => saveCurrentResult('saved'));
@@ -388,8 +519,17 @@ function init() {
     if(deleteButton) deleteRecord(deleteButton.dataset.deleteType,deleteButton.dataset.id);
     else if(confirmButton) confirmSavedRecord(confirmButton.dataset.confirmId);
   }));
-  document.getElementById('clearBtn').addEventListener('click',() => { document.getElementById('calculatorForm').reset(); renderDiscountFields(); renderCardFields(); applyStorePreset(); submitCalculation(); });
-  renderHistory(); submitCalculation();
+  document.getElementById('adminStoreSelect').addEventListener('change',loadStoreAdminForm);
+  document.getElementById('adminCardSelect').addEventListener('change',loadCardAdminForm);
+  document.getElementById('storeRuleForm').addEventListener('submit',saveStoreAdminForm);
+  document.getElementById('cardRuleForm').addEventListener('submit',saveCardAdminForm);
+  document.getElementById('newCardBtn').addEventListener('click',newCard);
+  document.getElementById('deleteCardBtn').addEventListener('click',deleteAdminCard);
+  document.getElementById('exportRulesBtn').addEventListener('click',exportRules);
+  document.getElementById('importRulesInput').addEventListener('change',importRules);
+  document.getElementById('resetRulesBtn').addEventListener('click',()=>{ if(!confirm('確定恢復所有預設規則？自訂內容將被取代。'))return; rules=cloneDefaults(); saveRules(); selectedCardId='none'; refreshAdminSelects(); applyStorePreset(); alert('已恢復預設規則。'); });
+  document.getElementById('clearBtn').addEventListener('click',() => { document.getElementById('calculatorForm').reset(); selectedCardId='none'; renderDiscountFields(); renderCardFields(); applyStorePreset(); toggleAdvanced('store',false); toggleAdvanced('card',false); submitCalculation(); });
+  toggleAdvanced('store',false); toggleAdvanced('card',false); renderHistory(); submitCalculation();
 }
 
 if (typeof document !== 'undefined') document.addEventListener('DOMContentLoaded',init);
