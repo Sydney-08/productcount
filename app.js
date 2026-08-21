@@ -250,6 +250,7 @@ const DEFAULT_RULES = {
 };
 let rules = loadRules();
 let selectedCardId = 'none';
+let appliedPromotionId = '';
 
 function cloneDefaults() { return JSON.parse(JSON.stringify(DEFAULT_RULES)); }
 function loadRules() { if (typeof localStorage === 'undefined') return cloneDefaults(); try { const saved=JSON.parse(localStorage.getItem(RULES_STORAGE_KEY)); return saved?.stores?.length && saved?.cards ? saved : cloneDefaults(); } catch(error) { return cloneDefaults(); } }
@@ -318,13 +319,13 @@ function renderCardPresets() {
   document.getElementById('selectedCardSummary').innerHTML=card ? `<strong>${escapeHtml(card.bank)} ${escapeHtml(card.name)}</strong> · 本次自動套用 ${numberText(effectiveCardRate(card,storeId))}%${card.cap!==null&&card.cap!==''?`，上限 ${money(card.cap)}`:''}` : '未使用信用卡回饋';
 }
 
-function selectCard(cardId) {
+function selectCard(cardId, shouldCalculate = true) {
   selectedCardId=cardId;
   const card=rules.cards.find(item=>item.id===cardId);
   document.getElementById('cardType').value=card?'cash':'none';
   renderCardFields();
   if(card){ document.getElementById('cardRate').value=effectiveCardRate(card,field('store')); document.getElementById('cardCap').value=card.cap??''; }
-  renderCardPresets(); submitCalculation();
+  renderCardPresets(); if(shouldCalculate)submitCalculation();
 }
 
 function promotionMatchesDate(promotion,dateValue) {
@@ -354,15 +355,17 @@ function renderPromotionRecommendations() {
   container.innerHTML=matches.map((promotion,index)=>{
     const unavailable=promotionUnavailable(promotion,date),estimated=unavailable||promotion.infoOnly?0:promotionEstimatedValue(promotion,paid),meets=!promotion.threshold||paid>=promotion.threshold;
     const disabled=unavailable||promotion.infoOnly;
-    return `<article class="promotion-item ${index===0&&!disabled?'recommended':''} ${unavailable?'unavailable':''}"><div class="promotion-top"><div><span class="promotion-provider">${escapeHtml(promotion.provider)}</span><h3>${escapeHtml(promotion.title)}</h3></div><div class="promotion-reward">${escapeHtml(promotion.rewardText)}</div></div><div class="promotion-meta"><span>${escapeHtml(promotion.payment)}</span><span>${promotion.start?`${promotion.start}～${promotion.end}`:'每日適用'}</span>${unavailable?'<span class="quota-full">本月額滿</span>':''}${promotion.infoOnly?'<span>資格待確認</span>':''}${promotion.threshold?`<span>${meets?'已達門檻':'差 '+money(promotion.threshold-paid)}</span>`:''}</div><div class="promotion-actions"><small>${escapeHtml(promotion.note)}${estimated?` 預估價值 ${money(estimated)}`:''}</small><button type="button" class="apply-promotion" data-promotion-id="${promotion.id}" ${disabled?'disabled':''}>${unavailable?'本月已額滿':promotion.infoOnly?'條件待確認':'一鍵套用'}</button></div></article>`;
+    const applied=appliedPromotionId===promotion.id;
+    return `<article class="promotion-item ${index===0&&!disabled?'recommended':''} ${unavailable?'unavailable':''} ${applied?'applied':''}"><div class="promotion-top"><div><span class="promotion-provider">${escapeHtml(promotion.provider)}</span><h3>${escapeHtml(promotion.title)}</h3></div><div class="promotion-reward">${escapeHtml(promotion.rewardText)}</div></div><div class="promotion-meta"><span>${escapeHtml(promotion.payment)}</span><span>${promotion.start?`${promotion.start}～${promotion.end}`:'每日適用'}</span>${unavailable?'<span class="quota-full">本月額滿</span>':''}${promotion.infoOnly?'<span>資格待確認</span>':''}${promotion.threshold?`<span>${meets?'已達門檻':'差 '+money(promotion.threshold-paid)}</span>`:''}</div><div class="promotion-actions"><small>${escapeHtml(promotion.note)}${estimated?` 預估價值 ${money(estimated)}`:''}</small><button type="button" class="apply-promotion" data-promotion-id="${promotion.id}" ${disabled?'disabled':''}>${unavailable?'本月已額滿':promotion.infoOnly?'條件待確認':applied?'✓ 已套用':'一鍵套用'}</button></div></article>`;
   }).join('');
 }
 
 function applyPromotion(promotionId) {
   const promotion=PROMOTIONS.find(item=>item.id===promotionId); if(!promotion)return;
+  if(promotion.infoOnly||promotionUnavailable(promotion,field('purchaseDate')))return;
   // 一鍵套用以單一方案為準，先清除上一個推薦方案，避免不同支付工具被錯誤疊加。
   document.getElementById('thresholdType').value='none'; document.getElementById('thresholdAmount').value=0; document.getElementById('thresholdReward').value=0; document.getElementById('thresholdCap').value=''; document.getElementById('thresholdMinimum').value=0;
-  document.getElementById('paymentType').value='none'; document.getElementById('paymentRate').value=0; document.getElementById('paymentMinimum').value=0; document.getElementById('paymentCap').value=''; selectCard('none');
+  document.getElementById('paymentType').value='none'; document.getElementById('paymentRate').value=0; document.getElementById('paymentMinimum').value=0; document.getElementById('paymentCap').value=''; selectCard('none',false);
   if(promotion.kind==='coupon'||promotion.kind==='points'||promotion.kind==='instantDiscount'){
     document.getElementById('thresholdType').value=promotion.kind==='points'?'oncePoints':promotion.kind==='instantDiscount'?'instantOff':(promotion.repeat?'repeatCash':'onceCash');
     document.getElementById('thresholdAmount').value=promotion.threshold; document.getElementById('thresholdReward').value=promotion.value;
@@ -372,9 +375,9 @@ function applyPromotion(promotionId) {
   if(promotion.kind==='paymentRate'){ document.getElementById('paymentRate').value=promotion.value; document.getElementById('paymentMinimum').value=promotion.threshold||0; document.getElementById('paymentCap').value=''; }
   else { document.getElementById('paymentRate').value=0; }
   const matchingCard=promotion.provider.includes('國泰')?rules.cards.find(card=>card.id==='cube'):promotion.provider.includes('玉山')?rules.cards.find(card=>card.id==='unicard'):null;
-  if(promotion.kind==='cardRate'&&matchingCard){ selectCard(matchingCard.id); document.getElementById('cardRate').value=promotion.value; document.getElementById('selectedCardSummary').innerHTML=`<strong>${escapeHtml(matchingCard.bank)} ${escapeHtml(matchingCard.name)}</strong> · 已套用安全預設 ${numberText(promotion.value)}%`; }
-  else if(matchingCard)selectCard(matchingCard.id);
-  submitCalculation(); renderPromotionRecommendations();
+  if(promotion.kind==='cardRate'&&matchingCard){ selectCard(matchingCard.id,false); document.getElementById('cardRate').value=promotion.value; document.getElementById('selectedCardSummary').innerHTML=`<strong>${escapeHtml(matchingCard.bank)} ${escapeHtml(matchingCard.name)}</strong> · 已套用安全預設 ${numberText(promotion.value)}%`; }
+  else if(matchingCard)selectCard(matchingCard.id,false);
+  appliedPromotionId=promotion.id; submitCalculation();
   showRecordMessage(`已套用「${promotion.title}」，請確認名額與排除條件。`);
   document.getElementById('results').scrollIntoView({behavior:'smooth',block:'start'});
 }
@@ -581,8 +584,8 @@ function init() {
   renderStoreOptions(); renderDiscountFields(); renderCardFields(); updateStoreMethodFields(); refreshAdminSelects(); applyStorePreset(); renderCardPresets();
   document.getElementById('discountType').addEventListener('change',renderDiscountFields);
   document.getElementById('cardType').addEventListener('change',()=>{ selectedCardId='none'; renderCardFields(); renderCardPresets(); });
-  document.getElementById('store').addEventListener('change',()=>{ applyStorePreset(); if(selectedCardId!=='none')selectCard(selectedCardId); else submitCalculation(); });
-  document.getElementById('purchaseDate').addEventListener('change',renderPromotionRecommendations);
+  document.getElementById('store').addEventListener('change',()=>{ appliedPromotionId=''; applyStorePreset(); if(selectedCardId!=='none')selectCard(selectedCardId); else submitCalculation(); });
+  document.getElementById('purchaseDate').addEventListener('change',()=>{ appliedPromotionId=''; renderPromotionRecommendations(); });
   document.getElementById('storePointMethod').addEventListener('change',updateStoreMethodFields);
   document.getElementById('multiplierOptions').addEventListener('click',event=>{ const button=event.target.closest('[data-multiplier]'); if(!button)return; if(button.dataset.multiplier==='custom'){ toggleAdvanced('store',true); document.getElementById('storeMultiplier').focus(); return; } document.getElementById('storeMultiplier').value=button.dataset.multiplier; updateMultiplierButtons(); submitCalculation(); });
   document.getElementById('storeMultiplier').addEventListener('input',updateMultiplierButtons);
@@ -613,7 +616,7 @@ function init() {
   document.getElementById('exportRulesBtn').addEventListener('click',exportRules);
   document.getElementById('importRulesInput').addEventListener('change',importRules);
   document.getElementById('resetRulesBtn').addEventListener('click',()=>{ if(!confirm('確定恢復所有預設規則？自訂內容將被取代。'))return; rules=cloneDefaults(); saveRules(); selectedCardId='none'; refreshAdminSelects(); applyStorePreset(); alert('已恢復預設規則。'); });
-  document.getElementById('clearBtn').addEventListener('click',() => { document.getElementById('calculatorForm').reset(); selectedCardId='none'; renderDiscountFields(); renderCardFields(); applyStorePreset(); toggleAdvanced('store',false); toggleAdvanced('card',false); submitCalculation(); });
+  document.getElementById('clearBtn').addEventListener('click',() => { document.getElementById('calculatorForm').reset(); selectedCardId='none'; appliedPromotionId=''; renderDiscountFields(); renderCardFields(); applyStorePreset(); toggleAdvanced('store',false); toggleAdvanced('card',false); submitCalculation(); });
   toggleAdvanced('store',false); toggleAdvanced('card',false); renderHistory(); submitCalculation();
 }
 
