@@ -232,7 +232,14 @@ const PROMOTIONS = [
   {id:'seven-jcb-easy10',storeId:'7-eleven',title:'JCB 悠遊聯名晶緻卡自動加值',start:'2026-01-01',end:'2026-12-31',provider:'悠遊卡',payment:'悠遊卡',kind:'paymentRate',value:10,rewardText:'10% 現金回饋',note:'限自動加值，每卡每月上限 $50；計算基準待確認。',infoOnly:true},
   {id:'seven-pi-discount100',storeId:'7-eleven',title:'Pi 拍錢包指定銀行卡立折',start:'2026-08-19',end:'2026-08-23',provider:'Pi 拍錢包',payment:'Pi 拍錢包',kind:'instantDiscount',threshold:1111,value:100,repeat:false,cap:100,rewardText:'滿 $1,111 立折 $100',note:'玉山、台新、聯邦或中信卡；每戶限一次。'},
   {id:'seven-pi-allme3',storeId:'7-eleven',title:'Pi 拍錢包綁中信 ALL ME 卡',start:'2026-08-01',end:'2026-12-31',provider:'Pi 拍錢包',payment:'Pi 拍錢包',kind:'paymentRate',value:3,rewardText:'最高 3% 中信點',note:'每戶每月上限 300 點；實際回饋組成待確認，安全預設 3%。'},
-  {id:'seven-easypay4',storeId:'7-eleven',title:'悠遊付筆筆回饋',start:'2026-07-01',end:'2026-09-30',provider:'悠遊付',payment:'悠遊付',kind:'paymentRate',value:4,rewardText:'筆筆 4% 回饋金',note:'每戶每月上限 $1,000；最高 12% 另含月級挑戰。'}
+  {id:'seven-easypay4',storeId:'7-eleven',title:'悠遊付筆筆回饋',start:'2026-07-01',end:'2026-09-30',provider:'悠遊付',payment:'悠遊付',kind:'paymentRate',value:4,rewardText:'筆筆 4% 回饋金',note:'每戶每月上限 $1,000；最高 12% 另含月級挑戰。'},
+  {id:'family-richart38',storeId:'family',title:'台新 Richart 卡 Pay著刷超商回饋',start:null,end:null,provider:'台新Pay',payment:'台新Pay',kind:'paymentRate',value:3.8,rewardText:'3.8% 台新Point',infoOnly:true,note:'活動期間、基本回饋組成、回饋上限及全家適用範圍待確認。'},
+  {id:'family-cube-redemption',storeId:'family',title:'CUBE 卡小樹點全家折抵',start:null,end:null,provider:'My FamiPay／全盈+PAY',payment:'My FamiPay',kind:'redemption',value:0,rewardText:'最高折抵 100%',redemptionOnly:true,note:'100% 是點數折抵上限，不是 100% 回饋；折抵比例與滿額範圍待確認。'},
+  {id:'family-unicard20',storeId:'family',title:'玉山 Unicard 全家最高回饋',start:null,end:null,provider:'玉山Wallet',payment:'玉山Wallet',kind:'paymentRate',value:20,rewardText:'最高 20% 玉山 e point',infoOnly:true,note:'須確認全家百大特店資格、20% 組成、新戶加碼、期間及是否限定玉山Wallet。'},
+  {id:'family-ubot-line11',storeId:'family',title:'聯邦信用卡 LINE Pay 全家回饋',start:null,end:null,provider:'LINE Pay',payment:'LINE Pay',kind:'paymentRate',value:11,rewardText:'最高 11% 現金回饋',infoOnly:true,note:'偶數日比例、指定條件、回饋上限、活動期間及適用卡別待確認。'},
+  {id:'family-cathay-points-redemption',storeId:'family',title:'國泰世華紅利點數全家折抵',start:null,end:null,provider:'全家錢包',payment:'全家錢包',kind:'redemption',value:0,rewardText:'20 點折 $1',redemptionOnly:true,note:'適用卡別、活動期間、最低折抵點數及排除商品待確認。'},
+  {id:'family-taishin-points-redemption',storeId:'family',title:'台新紅利點數全家折抵',start:null,end:null,provider:'全家錢包',payment:'全家錢包',kind:'redemption',value:0,rewardText:'100 點折 $6',redemptionOnly:true,note:'適用卡別、活動期間與折抵上限定義待確認。'},
+  {id:'family-skbank-points-redemption',storeId:'family',title:'新光銀行紅利點數全家折抵',start:null,end:null,provider:'全家錢包',payment:'全家錢包',kind:'redemption',value:0,rewardText:'1,000 點折 $60',redemptionOnly:true,note:'適用卡別、活動期間、最低折抵點數及整筆折抵資格待確認。'}
 ];
 const DEFAULT_RULES = {
   stores: [
@@ -362,17 +369,17 @@ function renderPromotionRecommendations() {
   const matches=PROMOTIONS.filter(promotion=>promotion.storeId===storeId&&promotionMatchesDate(promotion,date)).sort((a,b)=>Number(promotionUnavailable(a,date)||a.infoOnly&&!confirmedPromotionIds.has(a.id))-Number(promotionUnavailable(b,date)||b.infoOnly&&!confirmedPromotionIds.has(b.id))||promotionEstimatedValue(b,paid)-promotionEstimatedValue(a,paid));
   if(!matches.length){ container.innerHTML='<div class="promotion-empty">這個日期尚無已收錄的優惠。你仍可使用下方自訂欄位。</div>'; return; }
   container.innerHTML=matches.map((promotion,index)=>{
-    const unavailable=promotionUnavailable(promotion,date),confirmed=confirmedPromotionIds.has(promotion.id),estimated=unavailable||promotion.infoOnly&&!confirmed?0:promotionEstimatedValue(promotion,paid),meets=!promotion.threshold||paid>=promotion.threshold;
-    const disabled=unavailable;
+    const unavailable=promotionUnavailable(promotion,date),confirmed=confirmedPromotionIds.has(promotion.id),estimated=unavailable||promotion.redemptionOnly||promotion.infoOnly&&!confirmed?0:promotionEstimatedValue(promotion,paid),meets=!promotion.threshold||paid>=promotion.threshold;
+    const disabled=unavailable||promotion.redemptionOnly;
     const applied=appliedPromotionId===promotion.id;
     const paymentRules=promotion.allowedPayments?.length?`<div class="payment-rules"><span class="allowed-rule">可用：${promotion.allowedPayments.map(escapeHtml).join('、')}</span>${promotion.excludedPayments?.length?`<span class="excluded-rule">不適用：${promotion.excludedPayments.map(escapeHtml).join('、')}</span>`:''}${promotion.fullPaymentRequired?'<span>須以同一張卡全額支付</span>':''}</div>`:'';
-    return `<article class="promotion-item ${index===0&&!disabled?'recommended':''} ${unavailable?'unavailable':''} ${applied?'applied':''}"><div class="promotion-top"><div><span class="promotion-provider">${escapeHtml(promotion.provider)}</span><h3>${escapeHtml(promotion.title)}</h3></div><div class="promotion-reward">${escapeHtml(promotion.rewardText)}</div></div><div class="promotion-meta"><span>${escapeHtml(promotion.payment)}</span><span>${promotion.start?`${promotion.start}～${promotion.end}`:'每日適用'}</span>${unavailable?'<span class="quota-full">本月額滿</span>':''}${promotion.infoOnly&&!confirmed?'<span>資格待確認</span>':promotion.infoOnly&&confirmed?'<span>✓ 資格已確認</span>':''}${promotion.threshold?`<span>${meets?'已達門檻':'差 '+money(promotion.threshold-paid)}</span>`:''}</div>${paymentRules}<div class="promotion-actions"><small>${escapeHtml(promotion.note)}${estimated?` 預估價值 ${money(estimated)}`:''}</small><button type="button" class="apply-promotion" data-promotion-id="${promotion.id}" ${disabled?'disabled':''}>${unavailable?'本月已額滿':applied?'✓ 已套用':promotion.infoOnly&&!confirmed?'確認資格並套用':'一鍵套用'}</button></div></article>`;
+    return `<article class="promotion-item ${index===0&&!disabled?'recommended':''} ${unavailable?'unavailable':''} ${applied?'applied':''}"><div class="promotion-top"><div><span class="promotion-provider">${escapeHtml(promotion.provider)}</span><h3>${escapeHtml(promotion.title)}</h3></div><div class="promotion-reward">${escapeHtml(promotion.rewardText)}</div></div><div class="promotion-meta"><span>${escapeHtml(promotion.payment)}</span><span>${promotion.start?`${promotion.start}～${promotion.end}`:'每日適用'}</span>${unavailable?'<span class="quota-full">本月額滿</span>':''}${promotion.redemptionOnly?'<span>點數折抵，非新增回饋</span>':''}${promotion.infoOnly&&!confirmed?'<span>資格待確認</span>':promotion.infoOnly&&confirmed?'<span>✓ 資格已確認</span>':''}${promotion.threshold?`<span>${meets?'已達門檻':'差 '+money(promotion.threshold-paid)}</span>`:''}</div>${paymentRules}<div class="promotion-actions"><small>${escapeHtml(promotion.note)}${estimated?` 預估價值 ${money(estimated)}`:''}</small><button type="button" class="apply-promotion" data-promotion-id="${promotion.id}" ${disabled?'disabled':''}>${unavailable?'本月已額滿':promotion.redemptionOnly?'僅供折抵參考':applied?'✓ 已套用':promotion.infoOnly&&!confirmed?'確認資格並套用':'一鍵套用'}</button></div></article>`;
   }).join('');
 }
 
 function applyPromotion(promotionId) {
   const promotion=PROMOTIONS.find(item=>item.id===promotionId); if(!promotion)return;
-  if(promotionUnavailable(promotion,field('purchaseDate')))return;
+  if(promotionUnavailable(promotion,field('purchaseDate'))||promotion.redemptionOnly)return;
   if(promotion.infoOnly&&!confirmedPromotionIds.has(promotion.id)){
     const accepted=window.confirm(`此活動的完整資格尚待確認：\n\n${promotion.note}\n\n請確認你已查看官方活動規則、符合資格且仍有回饋名額。\n\n確定要以「${promotion.rewardText}」計入嗎？`);
     if(!accepted)return;
