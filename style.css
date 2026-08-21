@@ -60,6 +60,10 @@ input.invalid { border-color:var(--danger); }
 .apply-promotion { padding:7px 12px; color:#fff; background:var(--brand); border:0; border-radius:8px; font-weight:750; cursor:pointer; }
 .apply-promotion:disabled { color:#7a838a; background:#dce1e4; cursor:not-allowed; }
 .promotion-meta .quota-full { color:var(--danger); background:#fff0ee; font-weight:750; }
+.payment-rules { display:grid; gap:4px; margin:8px 0; color:var(--muted); font-size:.72rem; }
+.payment-rules span { padding-left:9px; border-left:3px solid var(--line); }
+.payment-rules .allowed-rule { color:var(--brand-dark); border-left-color:var(--brand); }
+.payment-rules .excluded-rule { color:var(--danger); border-left-color:#e7a39d; }
 .promotion-empty { padding:22px; text-align:center; color:var(--muted); background:#f7f9fa; border-radius:12px; }
 .promotion-disclaimer { margin:12px 0 0; color:var(--muted); font-size:.75rem; }
 .error { padding:12px 14px; border-radius:10px; color:var(--danger); background:#fff0ee; font-weight:650; }
