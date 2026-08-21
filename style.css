@@ -47,6 +47,7 @@ input.invalid { border-color:var(--danger); }
 .promotion-list { display:grid; gap:10px; }
 .promotion-item { padding:14px; border:1px solid var(--line); border-radius:14px; }
 .promotion-item.recommended { border-color:#88b9ad; background:#f7fbfa; }
+.promotion-item.unavailable { opacity:.68; background:#f5f5f5; }
 .promotion-top { display:flex; justify-content:space-between; align-items:start; gap:12px; }
 .promotion-item h3 { margin:0; font-size:.98rem; }
 .promotion-provider { display:inline-block; margin-bottom:5px; padding:3px 7px; color:var(--brand-dark); background:var(--soft); border-radius:999px; font-size:.7rem; font-weight:800; }
@@ -56,6 +57,8 @@ input.invalid { border-color:var(--danger); }
 .promotion-actions { display:flex; justify-content:space-between; align-items:center; gap:10px; }
 .promotion-actions small { color:var(--muted); }
 .apply-promotion { padding:7px 12px; color:#fff; background:var(--brand); border:0; border-radius:8px; font-weight:750; cursor:pointer; }
+.apply-promotion:disabled { color:#7a838a; background:#dce1e4; cursor:not-allowed; }
+.promotion-meta .quota-full { color:var(--danger); background:#fff0ee; font-weight:750; }
 .promotion-empty { padding:22px; text-align:center; color:var(--muted); background:#f7f9fa; border-radius:12px; }
 .promotion-disclaimer { margin:12px 0 0; color:var(--muted); font-size:.75rem; }
 .error { padding:12px 14px; border-radius:10px; color:var(--danger); background:#fff0ee; font-weight:650; }

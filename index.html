@@ -94,8 +94,9 @@
       <section class="card">
         <div class="section-heading"><span>5</span><div><h2>行動支付回饋</h2><p>可選填，以實際付款金額計算</p></div></div>
         <div class="form-grid">
-          <label>支付方式<select id="paymentType"><option value="none">無</option><option>icash Pay</option><option>悠遊卡</option><option>實體信用卡</option><option>LINE Pay</option><option>街口</option><option>Apple Pay</option><option>Google Pay</option><option>Samsung Pay</option><option>其他</option></select></label>
+          <label>支付方式<select id="paymentType"><option value="none">無</option><option>OPEN錢包</option><option>icash Pay</option><option>icash2.0</option><option>行動隨時取</option><option>Pi 拍錢包</option><option>悠遊付</option><option>悠遊卡</option><option>實體信用卡</option><option>LINE Pay</option><option>街口</option><option>Apple Pay</option><option>Google Pay</option><option>Samsung Pay</option><option>其他</option></select></label>
           <label>回饋（%）<input id="paymentRate" type="number" min="0" max="100" step="0.01" value="0" inputmode="decimal"></label>
+          <label>最低回饋門檻（元）<input id="paymentMinimum" type="number" min="0" step="0.01" value="0" inputmode="decimal"></label>
           <label>回饋上限（元，留空＝無）<input id="paymentCap" type="number" min="0" step="0.01" placeholder="無上限" inputmode="decimal"></label>
         </div>
       </section>

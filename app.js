@@ -89,7 +89,7 @@ function calculateCardReward(paid, card) {
 }
 
 function calculatePaymentReward(paid, payment) {
-  if (!payment.type || payment.type === 'none') return 0;
+  if (!payment.type || payment.type === 'none' || paid < clamp(payment.minimum,0)) return 0;
   return round2(applyCap(paid * clamp(payment.rate, 0, 100) / 100, payment.cap));
 }
 
@@ -143,7 +143,7 @@ function readForm() {
     storePoints: { system: field('pointSystem'), method: field('storePointMethod'), rate: field('storeRate'), spendUnit: field('storeSpendUnit'), pointsUnit: field('storePointsUnit'), minimum: field('storeMinimum'), multiplier: field('storeMultiplier'), mode: field('multiplierMode'), pointValue: field('storePointValue') },
     threshold: { type: field('thresholdType'), threshold: field('thresholdAmount'), reward: field('thresholdReward'), repeat: field('thresholdRepeat') === 'yes', cap: nullableNumber('thresholdCap'), minimum: field('thresholdMinimum'), pointValue: field('thresholdPointValue') },
     card: { type: field('cardType'), rate: field('cardRate'), cap: nullableNumber('cardCap'), spendUnit: field('cardSpendUnit'), pointsUnit: field('cardPointsUnit'), pointValue: field('cardPointValue') },
-    payment: { type: field('paymentType'), rate: field('paymentRate'), cap: nullableNumber('paymentCap') }
+    payment: { type: field('paymentType'), rate: field('paymentRate'), minimum: field('paymentMinimum'), cap: nullableNumber('paymentCap') }
   };
 }
 
@@ -213,7 +213,22 @@ const PROMOTIONS = [
   {id:'cosmed-ctbc-sun',storeId:'cosmed',title:'uniopen 聯名卡週日滿額券',start:'2026-07-01',end:'2026-12-31',weekdays:[0],provider:'中國信託',payment:'實體信用卡',kind:'coupon',threshold:988,value:120,repeat:false,cap:120,rewardText:'滿 $988 送 $120',note:'限 uniopen 聯名卡；排除第三方支付。'},
   {id:'cosmed-cube-daily',storeId:'cosmed',title:'CUBE 卡樂饗購方案',start:null,end:null,weekdays:null,provider:'國泰世華 CUBE',payment:'實體信用卡',kind:'cardRate',value:2,rewardText:'2%～3.3% 小樹點',note:'依會員等級；目前安全預設套用 2%，排除第三方支付。'},
   {id:'cosmed-icash-mon',storeId:'cosmed',title:'icash Pay 週一不限金額回饋',start:'2026-07-01',end:'2026-12-31',weekdays:[1],provider:'icash Pay',payment:'icash Pay',kind:'paymentRate',value:5,rewardText:'5% OPENPOINT',note:'每戶每月上限 200 點，須自行確認剩餘額度。'},
-  {id:'cosmed-icash-double',storeId:'cosmed',title:'icash Pay 月月雙喜日',start:'2026-07-01',end:'2026-12-31',days:[11,22],provider:'icash Pay',payment:'icash Pay',kind:'points',threshold:1111,value:100,repeat:false,cap:100,rewardText:'滿 $1,111 送 100 點',note:'限每月 11、22 日；每戶每日上限 200 點。'}
+  {id:'cosmed-icash-double',storeId:'cosmed',title:'icash Pay 月月雙喜日',start:'2026-07-01',end:'2026-12-31',days:[11,22],provider:'icash Pay',payment:'icash Pay',kind:'points',threshold:1111,value:100,repeat:false,cap:100,rewardText:'滿 $1,111 送 100 點',note:'限每月 11、22 日；每戶每日上限 200 點。'},
+  {id:'seven-pickup-max20',storeId:'7-eleven',title:'行動隨時取綁指定銀行卡',start:'2026-07-01',end:'2026-09-30',provider:'行動隨時取',payment:'行動隨時取',kind:'paymentRate',value:20,rewardText:'最高 20% OPENPOINT',note:'指定銀行、組成與門檻尚待確認，不直接帶入計算。',infoOnly:true},
+  {id:'seven-openwallet-300',storeId:'7-eleven',title:'OPEN錢包綁中信／國泰／玉山卡',start:'2026-07-01',end:'2026-09-30',provider:'OPEN錢包',payment:'OPEN錢包',kind:'paymentRate',threshold:300,value:10,rewardText:'滿 $300 回饋 10%',note:'各銀行每月上限 60～80 點；2026 年 8 月名額已額滿。',unavailableMonths:['2026-08']},
+  {id:'seven-openwallet-200',storeId:'7-eleven',title:'OPEN錢包綁北富銀／兆豐卡',start:'2026-07-01',end:'2026-09-30',provider:'OPEN錢包',payment:'OPEN錢包',kind:'paymentRate',threshold:200,value:10,rewardText:'滿 $200 回饋 10%',note:'每戶每月上限 50 點；2026 年 8 月名額已額滿。',unavailableMonths:['2026-08']},
+  {id:'seven-openwallet-ubot',storeId:'7-eleven',title:'OPEN錢包綁聯邦卡',start:'2026-07-01',end:'2026-09-30',provider:'OPEN錢包',payment:'OPEN錢包',kind:'paymentRate',threshold:100,value:10,rewardText:'滿 $100 回饋 10%',note:'每戶每月上限 100 點；2026 年 8 月名額已額滿。',unavailableMonths:['2026-08']},
+  {id:'seven-openwallet-line100',storeId:'7-eleven',title:'OPEN錢包綁 LINE Bank 卡',start:'2026-07-01',end:'2026-09-30',provider:'OPEN錢包',payment:'OPEN錢包',kind:'points',threshold:100,value:10,repeat:false,cap:10,rewardText:'滿 $100 送 10 點',note:'不累贈；每戶每月上限 30 點。'},
+  {id:'seven-openwallet-line300',storeId:'7-eleven',title:'OPEN錢包綁 LINE Bank 卡活動二',start:'2026-07-01',end:'2026-09-30',provider:'OPEN錢包',payment:'OPEN錢包',kind:'points',threshold:300,value:50,repeat:false,cap:50,rewardText:'滿 $300 送 50 點',note:'累贈規則待確認；2026 年 8 月名額已額滿。',unavailableMonths:['2026-08']},
+  {id:'seven-icash2-tcb3',storeId:'7-eleven',title:'合庫指定 icash 聯名卡',start:'2026-07-01',end:'2026-12-31',provider:'icash2.0',payment:'icash2.0',kind:'paymentRate',value:3,rewardText:'3% OPENPOINT',note:'當期帳單消費門檻待確認，不直接帶入計算。',infoOnly:true},
+  {id:'seven-icash2-uniauto10',storeId:'7-eleven',title:'uniopen 聯名卡 icash 自動加值',start:'2026-07-01',end:'2026-12-31',provider:'icash2.0',payment:'icash2.0',kind:'paymentRate',value:10,rewardText:'10% OPENPOINT',note:'須每月登錄且限自動加值；每戶每月上限 50 點。'},
+  {id:'seven-icashpay-bank10',storeId:'7-eleven',title:'icash Pay 綁指定銀行／帳戶',start:'2026-07-01',end:'2026-12-31',provider:'icash Pay',payment:'icash Pay',kind:'paymentRate',threshold:150,value:10,rewardText:'滿 $150 回饋 10%',note:'國泰、元大、滙豐、兆豐、一銀、合庫、陽信或台中銀行；每戶每月上限 100 點。'},
+  {id:'seven-icashpay-uni4',storeId:'7-eleven',title:'icash Pay 綁中信 uniopen 聯名卡',start:'2026-07-01',end:'2026-08-31',provider:'icash Pay',payment:'icash Pay',kind:'paymentRate',threshold:199,value:4,rewardText:'滿 $199 加碼 4%',note:'每戶每月上限 150 點；最高 11% 尚含其他條件。'},
+  {id:'seven-ctbc-max11',storeId:'7-eleven',title:'中信 uniopen 聯名卡組合活動',start:'2026-08-01',end:'2026-08-31',provider:'中國信託',payment:'icash Pay',kind:'paymentRate',value:11,rewardText:'最高 11% OPENPOINT',note:'含一般、統一加碼、踩點任務與 icash Pay 加碼，資格待確認。',infoOnly:true},
+  {id:'seven-jcb-easy10',storeId:'7-eleven',title:'JCB 悠遊聯名晶緻卡自動加值',start:'2026-01-01',end:'2026-12-31',provider:'悠遊卡',payment:'悠遊卡',kind:'paymentRate',value:10,rewardText:'10% 現金回饋',note:'限自動加值，每卡每月上限 $50；計算基準待確認。',infoOnly:true},
+  {id:'seven-pi-discount100',storeId:'7-eleven',title:'Pi 拍錢包指定銀行卡立折',start:'2026-08-19',end:'2026-08-23',provider:'Pi 拍錢包',payment:'Pi 拍錢包',kind:'instantDiscount',threshold:1111,value:100,repeat:false,cap:100,rewardText:'滿 $1,111 立折 $100',note:'玉山、台新、聯邦或中信卡；每戶限一次。'},
+  {id:'seven-pi-allme3',storeId:'7-eleven',title:'Pi 拍錢包綁中信 ALL ME 卡',start:'2026-08-01',end:'2026-12-31',provider:'Pi 拍錢包',payment:'Pi 拍錢包',kind:'paymentRate',value:3,rewardText:'最高 3% 中信點',note:'每戶每月上限 300 點；實際回饋組成待確認，安全預設 3%。'},
+  {id:'seven-easypay4',storeId:'7-eleven',title:'悠遊付筆筆回饋',start:'2026-07-01',end:'2026-09-30',provider:'悠遊付',payment:'悠遊付',kind:'paymentRate',value:4,rewardText:'筆筆 4% 回饋金',note:'每戶每月上限 $1,000；最高 12% 另含月級挑戰。'}
 ];
 const DEFAULT_RULES = {
   stores: [
@@ -322,21 +337,24 @@ function promotionMatchesDate(promotion,dateValue) {
 }
 
 function promotionEstimatedValue(promotion,paid) {
-  if(promotion.kind==='paymentRate'||promotion.kind==='cardRate')return round2(paid*promotion.value/100);
   if(paid<(promotion.threshold||0))return 0;
+  if(promotion.kind==='paymentRate'||promotion.kind==='cardRate')return round2(paid*promotion.value/100);
   const times=promotion.repeat?Math.floor(paid/promotion.threshold):1;
   return round2(applyCap(times*promotion.value,promotion.cap));
 }
+
+function promotionUnavailable(promotion,dateValue) { return Boolean(promotion.unavailableMonths?.includes(String(dateValue).slice(0,7))); }
 
 function renderPromotionRecommendations() {
   const container=document.getElementById('promotionRecommendations'); if(!container)return;
   const date=field('purchaseDate'),storeId=field('store');
   const paid=currentCalculation?.paid ?? round2(clamp(field('unitPrice'),0)*Math.max(1,Math.floor(clamp(field('quantity'),1))));
-  const matches=PROMOTIONS.filter(promotion=>promotion.storeId===storeId&&promotionMatchesDate(promotion,date)).sort((a,b)=>promotionEstimatedValue(b,paid)-promotionEstimatedValue(a,paid));
+  const matches=PROMOTIONS.filter(promotion=>promotion.storeId===storeId&&promotionMatchesDate(promotion,date)).sort((a,b)=>Number(promotionUnavailable(a,date)||a.infoOnly)-Number(promotionUnavailable(b,date)||b.infoOnly)||promotionEstimatedValue(b,paid)-promotionEstimatedValue(a,paid));
   if(!matches.length){ container.innerHTML='<div class="promotion-empty">這個日期尚無已收錄的優惠。你仍可使用下方自訂欄位。</div>'; return; }
   container.innerHTML=matches.map((promotion,index)=>{
-    const estimated=promotionEstimatedValue(promotion,paid),meets=!promotion.threshold||paid>=promotion.threshold;
-    return `<article class="promotion-item ${index===0?'recommended':''}"><div class="promotion-top"><div><span class="promotion-provider">${escapeHtml(promotion.provider)}</span><h3>${escapeHtml(promotion.title)}</h3></div><div class="promotion-reward">${escapeHtml(promotion.rewardText)}</div></div><div class="promotion-meta"><span>${escapeHtml(promotion.payment)}</span><span>${promotion.start?`${promotion.start}～${promotion.end}`:'每日適用'}</span>${promotion.threshold?`<span>${meets?'已達門檻':'差 '+money(promotion.threshold-paid)}</span>`:''}</div><div class="promotion-actions"><small>${escapeHtml(promotion.note)}${estimated?` 預估價值 ${money(estimated)}`:''}</small><button type="button" class="apply-promotion" data-promotion-id="${promotion.id}">一鍵套用</button></div></article>`;
+    const unavailable=promotionUnavailable(promotion,date),estimated=unavailable||promotion.infoOnly?0:promotionEstimatedValue(promotion,paid),meets=!promotion.threshold||paid>=promotion.threshold;
+    const disabled=unavailable||promotion.infoOnly;
+    return `<article class="promotion-item ${index===0&&!disabled?'recommended':''} ${unavailable?'unavailable':''}"><div class="promotion-top"><div><span class="promotion-provider">${escapeHtml(promotion.provider)}</span><h3>${escapeHtml(promotion.title)}</h3></div><div class="promotion-reward">${escapeHtml(promotion.rewardText)}</div></div><div class="promotion-meta"><span>${escapeHtml(promotion.payment)}</span><span>${promotion.start?`${promotion.start}～${promotion.end}`:'每日適用'}</span>${unavailable?'<span class="quota-full">本月額滿</span>':''}${promotion.infoOnly?'<span>資格待確認</span>':''}${promotion.threshold?`<span>${meets?'已達門檻':'差 '+money(promotion.threshold-paid)}</span>`:''}</div><div class="promotion-actions"><small>${escapeHtml(promotion.note)}${estimated?` 預估價值 ${money(estimated)}`:''}</small><button type="button" class="apply-promotion" data-promotion-id="${promotion.id}" ${disabled?'disabled':''}>${unavailable?'本月已額滿':promotion.infoOnly?'條件待確認':'一鍵套用'}</button></div></article>`;
   }).join('');
 }
 
@@ -344,14 +362,14 @@ function applyPromotion(promotionId) {
   const promotion=PROMOTIONS.find(item=>item.id===promotionId); if(!promotion)return;
   // 一鍵套用以單一方案為準，先清除上一個推薦方案，避免不同支付工具被錯誤疊加。
   document.getElementById('thresholdType').value='none'; document.getElementById('thresholdAmount').value=0; document.getElementById('thresholdReward').value=0; document.getElementById('thresholdCap').value=''; document.getElementById('thresholdMinimum').value=0;
-  document.getElementById('paymentType').value='none'; document.getElementById('paymentRate').value=0; document.getElementById('paymentCap').value=''; selectCard('none');
-  if(promotion.kind==='coupon'||promotion.kind==='points'){
-    document.getElementById('thresholdType').value=promotion.kind==='points'?'oncePoints':(promotion.repeat?'repeatCash':'onceCash');
+  document.getElementById('paymentType').value='none'; document.getElementById('paymentRate').value=0; document.getElementById('paymentMinimum').value=0; document.getElementById('paymentCap').value=''; selectCard('none');
+  if(promotion.kind==='coupon'||promotion.kind==='points'||promotion.kind==='instantDiscount'){
+    document.getElementById('thresholdType').value=promotion.kind==='points'?'oncePoints':promotion.kind==='instantDiscount'?'instantOff':(promotion.repeat?'repeatCash':'onceCash');
     document.getElementById('thresholdAmount').value=promotion.threshold; document.getElementById('thresholdReward').value=promotion.value;
     document.getElementById('thresholdRepeat').value=promotion.repeat?'yes':'no'; document.getElementById('thresholdCap').value=promotion.cap??''; document.getElementById('thresholdMinimum').value=promotion.threshold; document.getElementById('thresholdPointValue').value=1;
   }
   document.getElementById('paymentType').value=promotion.payment;
-  if(promotion.kind==='paymentRate'){ document.getElementById('paymentRate').value=promotion.value; document.getElementById('paymentCap').value=''; }
+  if(promotion.kind==='paymentRate'){ document.getElementById('paymentRate').value=promotion.value; document.getElementById('paymentMinimum').value=promotion.threshold||0; document.getElementById('paymentCap').value=''; }
   else { document.getElementById('paymentRate').value=0; }
   const matchingCard=promotion.provider.includes('國泰')?rules.cards.find(card=>card.id==='cube'):promotion.provider.includes('玉山')?rules.cards.find(card=>card.id==='unicard'):null;
   if(promotion.kind==='cardRate'&&matchingCard){ selectCard(matchingCard.id); document.getElementById('cardRate').value=promotion.value; document.getElementById('selectedCardSummary').innerHTML=`<strong>${escapeHtml(matchingCard.bank)} ${escapeHtml(matchingCard.name)}</strong> · 已套用安全預設 ${numberText(promotion.value)}%`; }
@@ -600,4 +618,4 @@ function init() {
 }
 
 if (typeof document !== 'undefined') document.addEventListener('DOMContentLoaded',init);
-if (typeof module !== 'undefined') module.exports = { calculateProductDiscount, calculateThresholdActivity, calculateStorePoints, calculateCardReward, calculatePaymentReward, calculateAll, promotionMatchesDate, promotionEstimatedValue };
+if (typeof module !== 'undefined') module.exports = { calculateProductDiscount, calculateThresholdActivity, calculateStorePoints, calculateCardReward, calculatePaymentReward, calculateAll, promotionMatchesDate, promotionEstimatedValue, promotionUnavailable, PROMOTIONS };
