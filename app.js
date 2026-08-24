@@ -119,9 +119,31 @@ function calculateAll(data) {
   const thresholdValue = round2(thresholdPointValue + threshold.cash);
   const totalReward = round2(product.saving + threshold.discount + store.value + thresholdValue + card.value + payment);
   const effectiveCost = round2(product.original + serviceFee - totalReward);
-  const rewardRate = product.original ? round2((product.original - effectiveCost) / product.original * 100) : 0;
+  const netSavings = round2(product.original - effectiveCost);
+  const rewardRate = product.original ? round2(netSavings / product.original * 100) : 0;
   const effectiveDiscount = product.original ? round2(effectiveCost / product.original * 10) : 0;
-  return { product, threshold, subtotalAfterDiscounts, serviceFeeBase, serviceFee, paid, store, thresholdValue, card, payment, totalReward, effectiveCost, rewardRate, effectiveDiscount };
+  return { product, threshold, subtotalAfterDiscounts, serviceFeeBase, serviceFee, paid, store, thresholdValue, card, payment, totalReward, netSavings, effectiveCost, rewardRate, effectiveDiscount };
+}
+
+// 購物車商品先保留各自的商品折扣，再以整張訂單重新計算滿額與付款回饋。
+function calculateOrder(items, config) {
+  const original = round2(items.reduce((sum,item)=>sum+clamp(item.original,0),0));
+  const discounted = round2(items.reduce((sum,item)=>sum+clamp(item.discounted ?? item.paid,0),0));
+  const productSaving = round2(original-discounted);
+  const threshold = calculateThresholdActivity(discounted,config.threshold||{});
+  threshold.discount=Math.min(discounted,threshold.discount);
+  const subtotalAfterDiscounts=round2(discounted-threshold.discount);
+  const serviceFeeBase=config.service?.basis==='original'?original:subtotalAfterDiscounts;
+  const serviceFee=config.storeId==='other'?calculateServiceFee(serviceFeeBase,config.service||{}):0;
+  const paid=round2(subtotalAfterDiscounts+serviceFee);
+  const store=calculateStorePoints(paid,config.storePoints||{});
+  const thresholdValue=round2(threshold.points*clamp(config.threshold?.pointValue,0)+threshold.cash);
+  const card=config.storeId==='cosmed'&&config.payment?.type==='icash Pay'?{cash:0,points:0,value:0}:calculateCardReward(paid,config.card||{});
+  const payment=calculatePaymentReward(paid,config.payment||{});
+  const totalReward=round2(productSaving+threshold.discount+store.value+thresholdValue+card.value+payment);
+  const effectiveCost=round2(original+serviceFee-totalReward);
+  const netSavings=round2(original-effectiveCost);
+  return {original,discounted,productSaving,threshold,serviceFee,paid,store,thresholdValue,card,payment,totalReward,netSavings,effectiveCost,rewardRate:original?round2(netSavings/original*100):0,effectiveDiscount:original?round2(effectiveCost/original*10):0};
 }
 
 // ---------- 畫面控制 ----------
@@ -156,7 +178,7 @@ function readForm() {
     service: { type: field('serviceFeeType'), basis: field('serviceFeeBasis'), rate: field('serviceFeeRate'), amount: field('serviceFeeAmount') },
     discount: { type: field('discountType'), rate: field('discountRate'), itemNumber: field('discountItemNumber'), groupSize: field('discountGroupSize'), bundleSize: field('bundleSize'), bundlePrice: field('bundlePrice'), threshold: field('productThreshold'), off: field('productOff'), repeat: field('productRepeat') === 'yes' },
     storePoints: { system: field('pointSystem'), method: field('storePointMethod'), rate: field('storeRate'), spendUnit: field('storeSpendUnit'), pointsUnit: field('storePointsUnit'), minimum: field('storeMinimum'), multiplier: field('storeMultiplier'), mode: field('multiplierMode'), pointValue: field('storePointValue') },
-    threshold: { type: field('thresholdType'), threshold: field('thresholdAmount'), reward: field('thresholdReward'), repeat: field('thresholdRepeat') === 'yes', cap: nullableNumber('thresholdCap'), minimum: field('thresholdMinimum'), pointValue: field('thresholdPointValue') },
+    threshold: { type: field('thresholdType'), threshold: field('thresholdAmount'), reward: field('thresholdReward'), repeat: field('thresholdType').startsWith('repeat'), cap: nullableNumber('thresholdCap'), minimum: field('thresholdMinimum'), pointValue: field('thresholdPointValue') },
     card: { type: field('cardType'), rate: field('cardRate'), cap: nullableNumber('cardCap'), spendUnit: field('cardSpendUnit'), pointsUnit: field('cardPointsUnit'), pointValue: field('cardPointValue') },
     payment: { type: field('paymentType'), rate: field('paymentRate'), minimum: field('paymentMinimum'), cap: nullableNumber('paymentCap') }
   };
@@ -165,6 +187,7 @@ function readForm() {
 function validateForm() {
   let valid = true;
   document.querySelectorAll('input[type="number"]').forEach(input => {
+    if(input.closest('.advanced-field-hidden,.conditional-hidden,[hidden]')){ input.classList.remove('invalid'); return; }
     const value = input.value === '' ? null : Number(input.value);
     const bad = (input.required && value === null) || (value !== null && (!Number.isFinite(value) || value < Number(input.min || -Infinity) || value > Number(input.max || Infinity)));
     input.classList.toggle('invalid', bad); if (bad) valid = false;
@@ -174,20 +197,32 @@ function validateForm() {
   return valid;
 }
 
+function updateThresholdFields() {
+  const type=field('thresholdType'),active=type!=='none',points=type.endsWith('Points');
+  ['thresholdAmount','thresholdReward','thresholdCap'].forEach(id=>document.getElementById(id)?.closest('label')?.classList.toggle('conditional-hidden',!active));
+  document.getElementById('thresholdPointValueLabel').classList.toggle('conditional-hidden',!points);
+}
+
+function updatePaymentFields() {
+  const active=field('paymentType')!=='none';
+  ['paymentRateLabel','paymentMinimumLabel','paymentCapLabel'].forEach(id=>document.getElementById(id).classList.toggle('conditional-hidden',!active));
+}
+
 function addResult(label, value, className = '') { return `<div class="${className}"><dt>${label}</dt><dd>${value}</dd></div>`; }
 
 function renderResults(result, data) {
   document.getElementById('effectiveCost').textContent = `折算後價格 ${money(result.effectiveCost)}`;
   document.getElementById('effectiveDiscount').textContent = `約 ${numberText(result.effectiveDiscount)} 折`;
-  document.getElementById('totalSaved').textContent = `總共省 ${money(result.totalReward)}`;
-  document.getElementById('rewardRate').textContent = `總回饋率 ${numberText(result.rewardRate)}%`;
+  document.getElementById('totalSaved').textContent = `淨省 ${money(result.netSavings)}`;
+  document.getElementById('rewardRate').textContent = `淨回饋率 ${numberText(result.rewardRate)}%`;
   document.getElementById('resultList').innerHTML =
     addResult('原始總價', money(result.product.original)) + addResult('商品折扣', `-${money(result.product.saving)}`) +
     addResult('滿額折扣', `-${money(result.threshold.discount)}`) + (data.storeId === 'other' ? addResult('服務費', `+${money(result.serviceFee)}`) : '') + addResult('實際付款', money(result.paid)) +
     addResult('店家點數', `${numberText(result.store.total)} 點<small>價值 ${money(result.store.value)}</small>`) +
     addResult('滿額活動', `${result.threshold.points ? numberText(result.threshold.points) + ' 點 · ' : ''}價值 ${money(result.thresholdValue)}`) +
     addResult('信用卡回饋', result.card.points ? `${numberText(result.card.points)} 點<small>價值 ${money(result.card.value)}</small>` : money(result.card.value)) +
-    addResult('支付回饋', money(result.payment)) + addResult('總回饋價值', money(result.totalReward), 'total-row') +
+    addResult('支付回饋', money(result.payment)) + addResult('優惠總價值', money(result.totalReward)) +
+    addResult('扣除額外費用後淨省', money(result.netSavings), 'total-row') +
     addResult('折算後價格', money(result.effectiveCost), 'total-row');
 
   const baseRuleText = data.storePoints.method === 'rate' ? `${money(result.paid)} × ${numberText(data.storePoints.rate)}%` : `每 ${numberText(data.storePoints.spendUnit)} 元給 ${numberText(data.storePoints.pointsUnit)} 點`;
@@ -202,18 +237,20 @@ function renderResults(result, data) {
     `${data.storePoints.system || '店家點數'}：${multiplierText}＝${numberText(result.store.total)} 點，價值 ${money(result.store.value)}`,
     `信用卡：${cardText}`,
     `行動支付：${money(result.paid)} × ${numberText(data.payment.rate)}%（套用上限後）＝${money(result.payment)}`,
-    `總回饋＝商品折扣＋滿額折扣＋各項回饋＝${money(result.totalReward)}`,
-    `折算後價格＝${money(result.product.original)}－${money(result.totalReward)}＝${money(result.effectiveCost)}`
+    `優惠總價值＝商品折扣＋滿額折扣＋各項回饋＝${money(result.totalReward)}`,
+    `淨省金額＝${money(result.totalReward)}－額外費用 ${money(result.serviceFee)}＝${money(result.netSavings)}`,
+    `折算後價格＝${money(result.product.original)}－淨省 ${money(result.netSavings)}＝${money(result.effectiveCost)}`
   ].map(text => `<li>${text}</li>`).join('');
 }
 
 function loadExample() {
-  const values = { unitPrice:1000, quantity:2, discountType:'percent', store:'cosmed', storeMultiplier:1, multiplierMode:'total', thresholdType:'instantOff', thresholdAmount:1500, thresholdReward:100, thresholdRepeat:'no', thresholdMinimum:0, thresholdPointValue:1, cardType:'cash', paymentType:'LINE Pay', paymentRate:2 };
+  const values = { unitPrice:1000, quantity:2, discountType:'percent', store:'cosmed', storeMultiplier:1, multiplierMode:'total', thresholdType:'instantOff', thresholdAmount:1500, thresholdReward:100, thresholdMinimum:0, thresholdPointValue:1, cardType:'cash', paymentType:'LINE Pay', paymentRate:2 };
   Object.entries(values).forEach(([id,value]) => { const el=document.getElementById(id); if(el) el.value=value; });
   applyStorePreset();
   renderDiscountFields(); document.getElementById('discountRate').value=8;
   renderCardFields(); document.getElementById('cardRate').value=5; document.getElementById('cardCap').value=200;
   document.getElementById('paymentCap').value=100;
+  updateThresholdFields(); updatePaymentFields();
   submitCalculation();
 }
 
@@ -359,6 +396,7 @@ function renderCardPresets() {
 function selectCard(cardId, shouldCalculate = true) {
   if(cardId!=='none'&&field('store')==='cosmed'&&field('paymentType')==='icash Pay'){
     document.getElementById('paymentType').value='none'; document.getElementById('paymentRate').value=0; document.getElementById('paymentMinimum').value=0; document.getElementById('paymentCap').value=''; appliedPromotionId='';
+    updatePaymentFields();
     showRecordMessage('康是美 icash Pay 與信用卡活動不可併用，已切換為信用卡方案。');
   }
   selectedCardId=cardId;
@@ -411,12 +449,12 @@ function applyPromotion(promotionId) {
     confirmedPromotionIds.add(promotion.id);
   }
   // 一鍵套用以單一方案為準，先清除上一個推薦方案，避免不同支付工具被錯誤疊加。
-  document.getElementById('thresholdType').value='none'; document.getElementById('thresholdAmount').value=0; document.getElementById('thresholdReward').value=0; document.getElementById('thresholdCap').value=''; document.getElementById('thresholdMinimum').value=0;
+  document.getElementById('thresholdType').value='none'; document.getElementById('thresholdAmount').value=0; document.getElementById('thresholdReward').value=0; document.getElementById('thresholdCap').value='';
   document.getElementById('paymentType').value='none'; document.getElementById('paymentRate').value=0; document.getElementById('paymentMinimum').value=0; document.getElementById('paymentCap').value=''; selectCard('none',false);
   if(promotion.kind==='coupon'||promotion.kind==='points'||promotion.kind==='instantDiscount'){
     document.getElementById('thresholdType').value=promotion.kind==='points'?'oncePoints':promotion.kind==='instantDiscount'?'instantOff':(promotion.repeat?'repeatCash':'onceCash');
     document.getElementById('thresholdAmount').value=promotion.threshold; document.getElementById('thresholdReward').value=promotion.value;
-    document.getElementById('thresholdRepeat').value=promotion.repeat?'yes':'no'; document.getElementById('thresholdCap').value=promotion.cap??''; document.getElementById('thresholdMinimum').value=promotion.threshold; document.getElementById('thresholdPointValue').value=1;
+    document.getElementById('thresholdCap').value=promotion.cap??''; document.getElementById('thresholdPointValue').value=1;
   }
   document.getElementById('paymentType').value=promotion.payment;
   if(promotion.kind==='paymentRate'){ document.getElementById('paymentRate').value=promotion.value; document.getElementById('paymentMinimum').value=promotion.threshold||0; document.getElementById('paymentCap').value=''; }
@@ -424,7 +462,7 @@ function applyPromotion(promotionId) {
   const matchingCard=promotion.provider.includes('國泰')?rules.cards.find(card=>card.id==='cube'):promotion.provider.includes('玉山')?rules.cards.find(card=>card.id==='unicard'):null;
   if(promotion.kind==='cardRate'&&matchingCard){ selectCard(matchingCard.id,false); document.getElementById('cardRate').value=promotion.value; document.getElementById('selectedCardSummary').innerHTML=`<strong>${escapeHtml(matchingCard.bank)} ${escapeHtml(matchingCard.name)}</strong> · 已套用安全預設 ${numberText(promotion.value)}%`; }
   else if(matchingCard)selectCard(matchingCard.id,false);
-  appliedPromotionId=promotion.id; submitCalculation();
+  appliedPromotionId=promotion.id; updateThresholdFields(); updatePaymentFields(); submitCalculation();
   showRecordMessage(`已套用「${promotion.title}」，請確認名額與排除條件。`);
   document.getElementById('results').scrollIntoView({behavior:'smooth',block:'start'});
 }
@@ -512,14 +550,20 @@ function createCurrentRecord() {
   return {
     id: recordId(), createdAt: new Date().toISOString(),
     product: field('productName').trim() || '未命名商品',
+    storeId: currentFormData.storeId,
     store: storeSelect.options[storeSelect.selectedIndex].text,
     card: selectedCard ? `${selectedCard.bank} ${selectedCard.name}` : '無信用卡',
     quantity: currentFormData.quantity,
     original: currentCalculation.product.original,
+    discounted: currentCalculation.product.discounted,
+    productSaving: currentCalculation.product.saving,
+    serviceFee: currentCalculation.serviceFee,
     paid: currentCalculation.paid,
     reward: currentCalculation.totalReward,
+    netSavings: currentCalculation.netSavings,
     effectiveCost: currentCalculation.effectiveCost,
-    rewardRate: currentCalculation.rewardRate
+    rewardRate: currentCalculation.rewardRate,
+    orderConfig: JSON.parse(JSON.stringify({storeId:currentFormData.storeId,storePoints:currentFormData.storePoints,threshold:currentFormData.threshold,card:currentFormData.card,payment:currentFormData.payment,service:currentFormData.service,cardName:selectedCard?`${selectedCard.bank} ${selectedCard.name}`:(currentFormData.card.type==='none'?'無信用卡':'自訂信用卡回饋'),purchaseDate:field('purchaseDate')}))
   };
 }
 
@@ -528,6 +572,11 @@ function saveCurrentResult(type) {
   if (!record) return showRecordMessage('請先完成一次計算。', true);
   const key = type === 'purchase' ? STORAGE_KEYS.purchases : STORAGE_KEYS.saved;
   const records = readRecords(key);
+  if(type==='saved'&&records.length){
+    const existingStore=records[0].storeId||records[0].store;
+    const incomingStore=record.storeId||record.store;
+    if(existingStore!==incomingStore)return showRecordMessage(`購物車目前是「${records[0].store}」訂單，請先結帳或清空後再加入其他店家的商品。`,true);
+  }
   records.unshift(record);
   if (writeRecords(key, records)) {
     renderHistory();
@@ -540,17 +589,37 @@ function historyItem(record) {
     <div class="history-item-header"><div><h3>${escapeHtml(record.product||'未命名商品')}</h3><time datetime="${record.createdAt}">${formatRecordDate(record.createdAt)} · ${escapeHtml(record.store)} · ${escapeHtml(record.card||'未記錄卡片')}</time></div><button type="button" class="delete-record" data-delete-type="saved" data-id="${record.id}" aria-label="移除此商品">移除</button></div>
     <div class="history-values">
       <div><span>數量</span><strong>${numberText(record.quantity)} 件</strong></div><div><span>原始總價</span><strong>${money(record.original)}</strong></div>
-      <div><span>實際付款</span><strong>${money(record.paid)}</strong></div><div><span>回饋價值</span><strong>${money(record.reward)}</strong></div>
+      <div><span>商品折後小計</span><strong>${money(record.discounted??record.paid)}</strong></div><div><span>商品折省</span><strong>${money(record.productSaving??0)}</strong></div>
     </div>
   </article>`;
 }
 
+function getCartOrder(items) {
+  if(!items.length)return null;
+  const newest=items[0],config=newest.orderConfig;
+  if(!config)return null;
+  return {result:calculateOrder(items,config),config,store:newest.store||'未記錄店家'};
+}
+
+function renderCartCheckoutPreview(items) {
+  const preview=document.getElementById('cartCheckoutPreview'),order=getCartOrder(items);
+  preview.hidden=!order;
+  if(!order)return;
+  const {result,config,store}=order;
+  const payment=config.payment?.type&&config.payment.type!=='none'?config.payment.type:'未使用行動支付';
+  document.getElementById('cartCheckoutTitle').textContent=`${store} · ${items.length} 個品項`;
+  document.getElementById('cartCheckoutDiscount').textContent=`約 ${numberText(result.effectiveDiscount)} 折`;
+  document.getElementById('cartCheckoutRule').textContent=`付款方案：${config.cardName||'無信用卡'}／${payment}。滿額與付款回饋已依整單 ${money(result.discounted)} 重新計算。`;
+  document.getElementById('cartCheckoutTotals').innerHTML=`<div><span>原始總價</span><strong>${money(result.original)}</strong></div><div><span>實際付款</span><strong>${money(result.paid)}</strong></div><div><span>優惠總價值</span><strong>${money(result.totalReward)}</strong></div><div><span>淨省金額</span><strong class="net-saving">${money(result.netSavings)}</strong></div>`;
+}
+
 function checkoutCart() {
   const items=readRecords(STORAGE_KEYS.saved); if(!items.length)return;
-  if(!window.confirm(`確定將購物車內 ${items.length} 個品項彙整成一筆訂單嗎？結帳後購物車會清空。`))return;
-  const total=property=>round2(items.reduce((sum,item)=>sum+clamp(item[property],0),0));
-  const original=total('original'),paid=total('paid'),reward=total('reward');
-  const order={id:recordId(),createdAt:new Date().toISOString(),items,totals:{original,paid,reward,effectiveCost:round2(original-reward)},stores:[...new Set(items.map(item=>item.store))]};
+  const calculated=getCartOrder(items);
+  if(!calculated)return showRecordMessage('這是舊版購物車資料，請清空後重新加入商品，才能使用整單試算。',true);
+  const {result,config,store}=calculated;
+  if(!window.confirm(`確認 ${store} 訂單：\n\n${items.length} 個品項\n實際付款 ${money(result.paid)}\n淨省 ${money(result.netSavings)}\n約 ${numberText(result.effectiveDiscount)} 折\n\n確認後購物車會清空。`))return;
+  const order={id:recordId(),createdAt:new Date().toISOString(),items,store,config,totals:{original:result.original,paid:result.paid,reward:result.totalReward,netSavings:result.netSavings,serviceFee:result.serviceFee,effectiveCost:result.effectiveCost,effectiveDiscount:result.effectiveDiscount}};
   const purchases = readRecords(STORAGE_KEYS.purchases);
   purchases.unshift(order);
   if (writeRecords(STORAGE_KEYS.purchases, purchases)) {
@@ -561,7 +630,8 @@ function checkoutCart() {
 function purchaseOrderItem(order) {
   const legacy=!Array.isArray(order.items),items=legacy?[{...order,product:order.product||'舊版單品紀錄'}]:order.items;
   const totals=legacy?{original:order.original||0,paid:order.paid||0,reward:order.reward||0,effectiveCost:order.effectiveCost||0}:order.totals;
-  return `<article class="history-item"><div class="history-item-header"><div><h3>訂單 · ${items.length} 個品項</h3><time datetime="${order.createdAt}">${formatRecordDate(order.createdAt)}</time></div><button type="button" class="delete-record" data-delete-type="purchase" data-id="${order.id}" aria-label="刪除此訂單">刪除訂單</button></div><div class="order-items">${items.map(item=>`<div class="order-line"><div><strong>${escapeHtml(item.product||'未命名商品')}</strong><br><span>${escapeHtml(item.store||'未記錄店家')} · ${numberText(item.quantity||1)} 件</span></div><strong>${money(item.paid||0)}</strong></div>`).join('')}</div><div class="history-values order-total"><div><span>原始總價</span><strong>${money(totals.original)}</strong></div><div><span>實際付款</span><strong>${money(totals.paid)}</strong></div><div><span>總回饋價值</span><strong>${money(totals.reward)}</strong></div><div><span>折算後價格</span><strong>${money(totals.effectiveCost)}</strong></div></div></article>`;
+  const netSavings=totals.netSavings??round2((totals.original||0)-(totals.effectiveCost||0));
+  return `<article class="history-item"><div class="history-item-header"><div><h3>${escapeHtml(order.store||items[0]?.store||'訂單')} · ${items.length} 個品項</h3><time datetime="${order.createdAt}">${formatRecordDate(order.createdAt)}</time></div><button type="button" class="delete-record" data-delete-type="purchase" data-id="${order.id}" aria-label="刪除此訂單">刪除訂單</button></div><div class="order-items">${items.map(item=>`<div class="order-line"><div><strong>${escapeHtml(item.product||'未命名商品')}</strong><br><span>${numberText(item.quantity||1)} 件</span></div><strong>${money(item.discounted??item.paid??0)}</strong></div>`).join('')}</div><div class="history-values order-total"><div><span>原始總價</span><strong>${money(totals.original)}</strong></div><div><span>實際付款</span><strong>${money(totals.paid)}</strong></div><div><span>優惠總價值</span><strong>${money(totals.reward)}</strong></div><div><span>額外費用</span><strong>${money(totals.serviceFee||0)}</strong></div><div><span>淨省金額</span><strong class="net-saving">${money(netSavings)}</strong></div><div><span>折算後價格</span><strong>${money(totals.effectiveCost)}</strong></div></div></article>`;
 }
 
 function renderHistory() {
@@ -571,14 +641,17 @@ function renderHistory() {
   document.getElementById('savedCount').textContent = saved.length;
   document.getElementById('purchaseCount').textContent = purchases.length;
   document.getElementById('savedTotalCount').textContent = saved.length;
-  document.getElementById('savedPaidTotal').textContent = money(sum(saved, 'paid'));
-  document.getElementById('savedRewardTotal').textContent = money(sum(saved, 'reward'));
-  document.getElementById('checkoutCartBtn').disabled = saved.length === 0;
+  const cartOrder=getCartOrder(saved);
+  document.getElementById('savedPaidTotal').textContent = money(cartOrder?.result.paid??sum(saved,'paid'));
+  document.getElementById('savedRewardTotal').textContent = money(cartOrder?.result.netSavings??sum(saved,'netSavings'));
+  document.getElementById('checkoutCartBtn').disabled = saved.length === 0 || !cartOrder;
   document.getElementById('purchaseTotalCount').textContent = purchases.length;
   document.getElementById('purchasePaidTotal').textContent = money(orderSum('paid'));
-  document.getElementById('purchaseRewardTotal').textContent = money(orderSum('reward'));
+  const purchaseNetSavings=round2(purchases.reduce((total,order)=>{ const totals=order.totals||order; const value=Number(totals.netSavings??round2((totals.original||0)-(totals.effectiveCost||0))); return total+(Number.isFinite(value)?value:0); },0));
+  document.getElementById('purchaseRewardTotal').textContent = money(purchaseNetSavings);
   document.getElementById('savedList').innerHTML = saved.length ? saved.map(historyItem).join('') : '<div class="empty-state">購物車是空的。<br>完成計算後按「加入購物車」。</div>';
   document.getElementById('purchaseList').innerHTML = purchases.length ? purchases.map(purchaseOrderItem).join('') : '<div class="empty-state">尚無訂單紀錄。<br>將購物車品項整筆確認買單後會顯示在這裡。</div>';
+  renderCartCheckoutPreview(saved);
 }
 
 function deleteRecord(type, id) {
@@ -646,13 +719,15 @@ function toggleAdvanced(kind, forceOpen) {
 
 function init() {
   const today=new Date(),localDate=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`; document.getElementById('purchaseDate').value=localDate;
-  renderStoreOptions(); renderDiscountFields(); renderCardFields(); updateStoreMethodFields(); refreshAdminSelects(); applyStorePreset(); renderCardPresets();
-  document.getElementById('discountType').addEventListener('change',renderDiscountFields);
+  renderStoreOptions(); renderDiscountFields(); renderCardFields(); updateStoreMethodFields(); refreshAdminSelects(); applyStorePreset(); renderCardPresets(); updateThresholdFields(); updatePaymentFields();
+  document.getElementById('discountType').addEventListener('change',()=>{renderDiscountFields(); submitCalculation();});
   document.getElementById('cardType').addEventListener('change',()=>{ selectedCardId='none'; renderCardFields(); renderCardPresets(); });
   document.getElementById('store').addEventListener('change',()=>{ appliedPromotionId=''; applyStorePreset(); if(selectedCardId!=='none')selectCard(selectedCardId); else submitCalculation(); });
   document.getElementById('purchaseDate').addEventListener('change',()=>{ appliedPromotionId=''; renderPromotionRecommendations(); });
   document.getElementById('storePointMethod').addEventListener('change',updateStoreMethodFields);
   document.getElementById('serviceFeeType').addEventListener('change',()=>{ updateServiceFeeVisibility(); submitCalculation(); });
+  document.getElementById('thresholdType').addEventListener('change',()=>{ updateThresholdFields(); submitCalculation(); });
+  document.getElementById('paymentType').addEventListener('change',()=>{ updatePaymentFields(); submitCalculation(); });
   document.getElementById('multiplierOptions').addEventListener('click',event=>{ const button=event.target.closest('[data-multiplier]'); if(!button)return; if(button.dataset.multiplier==='custom'){ toggleAdvanced('store',true); document.getElementById('storeMultiplier').focus(); return; } document.getElementById('storeMultiplier').value=button.dataset.multiplier; updateMultiplierButtons(); submitCalculation(); });
   document.getElementById('storeMultiplier').addEventListener('input',updateMultiplierButtons);
   document.getElementById('cardPresetGrid').addEventListener('click',event=>{ const button=event.target.closest('[data-card-id]'); if(button)selectCard(button.dataset.cardId); });
@@ -660,6 +735,9 @@ function init() {
   document.getElementById('toggleStoreAdvanced').addEventListener('click',()=>toggleAdvanced('store'));
   document.getElementById('toggleCardAdvanced').addEventListener('click',()=>toggleAdvanced('card'));
   document.getElementById('calculatorForm').addEventListener('submit',event => { event.preventDefault(); submitCalculation(); document.getElementById('results').scrollIntoView({behavior:'smooth',block:'start'}); });
+  let calculateTimer;
+  document.getElementById('calculatorForm').addEventListener('input',event=>{ if(!event.target.matches('input,select'))return; clearTimeout(calculateTimer); calculateTimer=setTimeout(submitCalculation,180); });
+  document.getElementById('calculatorForm').addEventListener('change',event=>{ if(!event.target.matches('input,select'))return; clearTimeout(calculateTimer); calculateTimer=setTimeout(submitCalculation,0); });
   document.getElementById('exampleBtn').addEventListener('click',loadExample);
   document.getElementById('saveResultBtn').addEventListener('click',() => saveCurrentResult('saved'));
   document.getElementById('clearSavedBtn').addEventListener('click',() => clearRecords('saved'));
@@ -681,9 +759,9 @@ function init() {
   document.getElementById('exportRulesBtn').addEventListener('click',exportRules);
   document.getElementById('importRulesInput').addEventListener('change',importRules);
   document.getElementById('resetRulesBtn').addEventListener('click',()=>{ if(!confirm('確定恢復所有預設規則？自訂內容將被取代。'))return; rules=cloneDefaults(); saveRules(); selectedCardId='none'; refreshAdminSelects(); applyStorePreset(); alert('已恢復預設規則。'); });
-  document.getElementById('clearBtn').addEventListener('click',() => { document.getElementById('calculatorForm').reset(); selectedCardId='none'; appliedPromotionId=''; renderDiscountFields(); renderCardFields(); applyStorePreset(); toggleAdvanced('store',false); toggleAdvanced('card',false); submitCalculation(); });
+  document.getElementById('clearBtn').addEventListener('click',() => { document.getElementById('calculatorForm').reset(); selectedCardId='none'; appliedPromotionId=''; renderDiscountFields(); renderCardFields(); applyStorePreset(); updateThresholdFields(); updatePaymentFields(); toggleAdvanced('store',false); toggleAdvanced('card',false); submitCalculation(); });
   toggleAdvanced('store',false); toggleAdvanced('card',false); renderHistory(); submitCalculation();
 }
 
 if (typeof document !== 'undefined') document.addEventListener('DOMContentLoaded',init);
-if (typeof module !== 'undefined') module.exports = { calculateProductDiscount, calculateThresholdActivity, calculateStorePoints, calculateCardReward, calculatePaymentReward, calculateServiceFee, calculateAll, promotionMatchesDate, promotionEstimatedValue, promotionUnavailable, PROMOTIONS };
+if (typeof module !== 'undefined') module.exports = { calculateProductDiscount, calculateThresholdActivity, calculateStorePoints, calculateCardReward, calculatePaymentReward, calculateServiceFee, calculateAll, calculateOrder, promotionMatchesDate, promotionEstimatedValue, promotionUnavailable, PROMOTIONS };
