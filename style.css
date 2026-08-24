@@ -30,6 +30,8 @@ input.invalid { border-color:var(--danger); }
 .conditional-box:empty { display:none; }
 .preset-summary { padding:13px 14px; color:var(--brand-dark); background:var(--soft); border-radius:12px; font-size:.88rem; }
 .preset-summary:empty { display:none; }
+.service-fee-box { display:grid; gap:12px; padding:14px; background:#fff9ed; border:1px solid #ead6a8; border-radius:12px; }
+.service-fee-box[hidden] { display:none; }
 .advanced-label { margin-top:4px; padding-top:13px; color:var(--muted); border-top:1px solid var(--line); font-size:.82rem; font-weight:700; }
 .advanced-toggle { padding:11px; color:var(--brand); background:#fff; border:1px dashed #b9cbc6; border-radius:10px; font-weight:750; cursor:pointer; }
 .advanced-field-hidden { display:none !important; }

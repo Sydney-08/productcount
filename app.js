@@ -95,12 +95,21 @@ function calculatePaymentReward(paid, payment) {
   return round2(applyCap(paid * clamp(payment.rate, 0, 100) / 100, payment.cap));
 }
 
+// 服務費以商品折扣與滿額現折後的金額為基礎，或直接使用固定金額。
+function calculateServiceFee(base, service) {
+  if (service.type === 'percent') return round2(base * clamp(service.rate, 0, 100) / 100);
+  if (service.type === 'fixed') return round2(clamp(service.amount, 0));
+  return 0;
+}
+
 // 統一依規格順序彙總所有優惠。
 function calculateAll(data) {
   const product = calculateProductDiscount(data.unitPrice, data.quantity, data.discount);
   const threshold = calculateThresholdActivity(product.discounted, data.threshold);
   threshold.discount = Math.min(product.discounted, threshold.discount);
-  const paid = round2(Math.max(0, product.discounted - threshold.discount));
+  const subtotalAfterDiscounts = round2(Math.max(0, product.discounted - threshold.discount));
+  const serviceFee = data.storeId === 'other' ? calculateServiceFee(subtotalAfterDiscounts, data.service || {}) : 0;
+  const paid = round2(subtotalAfterDiscounts + serviceFee);
   const store = calculateStorePoints(paid, data.storePoints);
   const thresholdPointValue = round2(threshold.points * clamp(data.threshold.pointValue, 0));
   // 康是美 icash Pay 與信用卡活動互斥，核心層再次阻擋重複回饋。
@@ -108,10 +117,10 @@ function calculateAll(data) {
   const payment = calculatePaymentReward(paid, data.payment);
   const thresholdValue = round2(thresholdPointValue + threshold.cash);
   const totalReward = round2(product.saving + threshold.discount + store.value + thresholdValue + card.value + payment);
-  const effectiveCost = round2(product.original - totalReward);
-  const rewardRate = product.original ? round2(totalReward / product.original * 100) : 0;
+  const effectiveCost = round2(product.original + serviceFee - totalReward);
+  const rewardRate = product.original ? round2((product.original - effectiveCost) / product.original * 100) : 0;
   const effectiveDiscount = product.original ? round2(effectiveCost / product.original * 10) : 0;
-  return { product, threshold, paid, store, thresholdValue, card, payment, totalReward, effectiveCost, rewardRate, effectiveDiscount };
+  return { product, threshold, subtotalAfterDiscounts, serviceFee, paid, store, thresholdValue, card, payment, totalReward, effectiveCost, rewardRate, effectiveDiscount };
 }
 
 // ---------- 畫面控制 ----------
@@ -143,6 +152,7 @@ function renderCardFields() {
 function readForm() {
   return {
     storeId: field('store'), unitPrice: clamp(field('unitPrice'), 0), quantity: Math.max(1, Math.floor(clamp(field('quantity'), 1))),
+    service: { type: field('serviceFeeType'), rate: field('serviceFeeRate'), amount: field('serviceFeeAmount') },
     discount: { type: field('discountType'), rate: field('discountRate'), itemNumber: field('discountItemNumber'), groupSize: field('discountGroupSize'), bundleSize: field('bundleSize'), bundlePrice: field('bundlePrice'), threshold: field('productThreshold'), off: field('productOff'), repeat: field('productRepeat') === 'yes' },
     storePoints: { system: field('pointSystem'), method: field('storePointMethod'), rate: field('storeRate'), spendUnit: field('storeSpendUnit'), pointsUnit: field('storePointsUnit'), minimum: field('storeMinimum'), multiplier: field('storeMultiplier'), mode: field('multiplierMode'), pointValue: field('storePointValue') },
     threshold: { type: field('thresholdType'), threshold: field('thresholdAmount'), reward: field('thresholdReward'), repeat: field('thresholdRepeat') === 'yes', cap: nullableNumber('thresholdCap'), minimum: field('thresholdMinimum'), pointValue: field('thresholdPointValue') },
@@ -172,7 +182,7 @@ function renderResults(result, data) {
   document.getElementById('rewardRate').textContent = `總回饋率 ${numberText(result.rewardRate)}%`;
   document.getElementById('resultList').innerHTML =
     addResult('原始總價', money(result.product.original)) + addResult('商品折扣', `-${money(result.product.saving)}`) +
-    addResult('滿額折扣', `-${money(result.threshold.discount)}`) + addResult('實際付款', money(result.paid)) +
+    addResult('滿額折扣', `-${money(result.threshold.discount)}`) + (data.storeId === 'other' ? addResult('服務費', `+${money(result.serviceFee)}`) : '') + addResult('實際付款', money(result.paid)) +
     addResult('店家點數', `${numberText(result.store.total)} 點<small>價值 ${money(result.store.value)}</small>`) +
     addResult('滿額活動', `${result.threshold.points ? numberText(result.threshold.points) + ' 點 · ' : ''}價值 ${money(result.thresholdValue)}`) +
     addResult('信用卡回饋', result.card.points ? `${numberText(result.card.points)} 點<small>價值 ${money(result.card.value)}</small>` : money(result.card.value)) +
@@ -187,7 +197,7 @@ function renderResults(result, data) {
     `原價 ${money(data.unitPrice)} × ${data.quantity} 件＝${money(result.product.original)}`,
     `商品活動折省 ${money(result.product.saving)}，折後為 ${money(result.product.discounted)}`,
     `滿額活動：${thresholdText}`,
-    `實際付款＝${money(result.product.discounted)}－${money(result.threshold.discount)}＝${money(result.paid)}`,
+    data.storeId === 'other' ? `服務費＝${money(result.serviceFee)}；實際付款＝${money(result.product.discounted)}－${money(result.threshold.discount)}＋${money(result.serviceFee)}＝${money(result.paid)}` : `實際付款＝${money(result.product.discounted)}－${money(result.threshold.discount)}＝${money(result.paid)}`,
     `${data.storePoints.system || '店家點數'}：${multiplierText}＝${numberText(result.store.total)} 點，價值 ${money(result.store.value)}`,
     `信用卡：${cardText}`,
     `行動支付：${money(result.paid)} × ${numberText(data.payment.rate)}%（套用上限後）＝${money(result.payment)}`,
@@ -280,6 +290,14 @@ function updateStoreMethodFields() {
   document.getElementById('storePointsUnitLabel').classList.toggle('is-hidden', isRate);
 }
 
+function updateServiceFeeVisibility() {
+  const isOther=field('store')==='other',type=field('serviceFeeType');
+  document.getElementById('serviceFeeBox').hidden=!isOther;
+  if(!isOther)document.getElementById('serviceFeeType').value='none';
+  document.getElementById('serviceFeeRateLabel').hidden=type!=='percent';
+  document.getElementById('serviceFeeAmountLabel').hidden=type!=='fixed';
+}
+
 // 選擇已知店家時自動帶入點數制度；其他店家仍可自由修改。
 function applyStorePreset() {
   const preset = rules.stores.find(item => item.id === field('store'));
@@ -306,7 +324,7 @@ function applyStorePreset() {
     document.getElementById('storeMultiplier').value = 1;
     document.getElementById('storeRuleNote').textContent = '可自行設定店家點數規則。';
   }
-  updateStoreMethodFields(); updateMultiplierButtons(); renderCardPresets();
+  updateStoreMethodFields(); updateServiceFeeVisibility(); updateMultiplierButtons(); renderCardPresets();
 }
 
 function renderStoreOptions() {
@@ -632,6 +650,7 @@ function init() {
   document.getElementById('store').addEventListener('change',()=>{ appliedPromotionId=''; applyStorePreset(); if(selectedCardId!=='none')selectCard(selectedCardId); else submitCalculation(); });
   document.getElementById('purchaseDate').addEventListener('change',()=>{ appliedPromotionId=''; renderPromotionRecommendations(); });
   document.getElementById('storePointMethod').addEventListener('change',updateStoreMethodFields);
+  document.getElementById('serviceFeeType').addEventListener('change',()=>{ updateServiceFeeVisibility(); submitCalculation(); });
   document.getElementById('multiplierOptions').addEventListener('click',event=>{ const button=event.target.closest('[data-multiplier]'); if(!button)return; if(button.dataset.multiplier==='custom'){ toggleAdvanced('store',true); document.getElementById('storeMultiplier').focus(); return; } document.getElementById('storeMultiplier').value=button.dataset.multiplier; updateMultiplierButtons(); submitCalculation(); });
   document.getElementById('storeMultiplier').addEventListener('input',updateMultiplierButtons);
   document.getElementById('cardPresetGrid').addEventListener('click',event=>{ const button=event.target.closest('[data-card-id]'); if(button)selectCard(button.dataset.cardId); });
@@ -665,4 +684,4 @@ function init() {
 }
 
 if (typeof document !== 'undefined') document.addEventListener('DOMContentLoaded',init);
-if (typeof module !== 'undefined') module.exports = { calculateProductDiscount, calculateThresholdActivity, calculateStorePoints, calculateCardReward, calculatePaymentReward, calculateAll, promotionMatchesDate, promotionEstimatedValue, promotionUnavailable, PROMOTIONS };
+if (typeof module !== 'undefined') module.exports = { calculateProductDiscount, calculateThresholdActivity, calculateStorePoints, calculateCardReward, calculatePaymentReward, calculateServiceFee, calculateAll, promotionMatchesDate, promotionEstimatedValue, promotionUnavailable, PROMOTIONS };
