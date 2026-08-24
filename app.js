@@ -108,7 +108,8 @@ function calculateAll(data) {
   const threshold = calculateThresholdActivity(product.discounted, data.threshold);
   threshold.discount = Math.min(product.discounted, threshold.discount);
   const subtotalAfterDiscounts = round2(Math.max(0, product.discounted - threshold.discount));
-  const serviceFee = data.storeId === 'other' ? calculateServiceFee(subtotalAfterDiscounts, data.service || {}) : 0;
+  const serviceFeeBase = data.service?.basis === 'original' ? product.original : subtotalAfterDiscounts;
+  const serviceFee = data.storeId === 'other' ? calculateServiceFee(serviceFeeBase, data.service || {}) : 0;
   const paid = round2(subtotalAfterDiscounts + serviceFee);
   const store = calculateStorePoints(paid, data.storePoints);
   const thresholdPointValue = round2(threshold.points * clamp(data.threshold.pointValue, 0));
@@ -120,7 +121,7 @@ function calculateAll(data) {
   const effectiveCost = round2(product.original + serviceFee - totalReward);
   const rewardRate = product.original ? round2((product.original - effectiveCost) / product.original * 100) : 0;
   const effectiveDiscount = product.original ? round2(effectiveCost / product.original * 10) : 0;
-  return { product, threshold, subtotalAfterDiscounts, serviceFee, paid, store, thresholdValue, card, payment, totalReward, effectiveCost, rewardRate, effectiveDiscount };
+  return { product, threshold, subtotalAfterDiscounts, serviceFeeBase, serviceFee, paid, store, thresholdValue, card, payment, totalReward, effectiveCost, rewardRate, effectiveDiscount };
 }
 
 // ---------- 畫面控制 ----------
@@ -152,7 +153,7 @@ function renderCardFields() {
 function readForm() {
   return {
     storeId: field('store'), unitPrice: clamp(field('unitPrice'), 0), quantity: Math.max(1, Math.floor(clamp(field('quantity'), 1))),
-    service: { type: field('serviceFeeType'), rate: field('serviceFeeRate'), amount: field('serviceFeeAmount') },
+    service: { type: field('serviceFeeType'), basis: field('serviceFeeBasis'), rate: field('serviceFeeRate'), amount: field('serviceFeeAmount') },
     discount: { type: field('discountType'), rate: field('discountRate'), itemNumber: field('discountItemNumber'), groupSize: field('discountGroupSize'), bundleSize: field('bundleSize'), bundlePrice: field('bundlePrice'), threshold: field('productThreshold'), off: field('productOff'), repeat: field('productRepeat') === 'yes' },
     storePoints: { system: field('pointSystem'), method: field('storePointMethod'), rate: field('storeRate'), spendUnit: field('storeSpendUnit'), pointsUnit: field('storePointsUnit'), minimum: field('storeMinimum'), multiplier: field('storeMultiplier'), mode: field('multiplierMode'), pointValue: field('storePointValue') },
     threshold: { type: field('thresholdType'), threshold: field('thresholdAmount'), reward: field('thresholdReward'), repeat: field('thresholdRepeat') === 'yes', cap: nullableNumber('thresholdCap'), minimum: field('thresholdMinimum'), pointValue: field('thresholdPointValue') },
@@ -197,7 +198,7 @@ function renderResults(result, data) {
     `原價 ${money(data.unitPrice)} × ${data.quantity} 件＝${money(result.product.original)}`,
     `商品活動折省 ${money(result.product.saving)}，折後為 ${money(result.product.discounted)}`,
     `滿額活動：${thresholdText}`,
-    data.storeId === 'other' ? `服務費＝${money(result.serviceFee)}；實際付款＝${money(result.product.discounted)}－${money(result.threshold.discount)}＋${money(result.serviceFee)}＝${money(result.paid)}` : `實際付款＝${money(result.product.discounted)}－${money(result.threshold.discount)}＝${money(result.paid)}`,
+    data.storeId === 'other' ? `服務費以${data.service.basis === 'original' ? '折扣前原價' : '折扣後價格'} ${money(result.serviceFeeBase)} 計算，共 ${money(result.serviceFee)}；實際付款＝${money(result.subtotalAfterDiscounts)}＋${money(result.serviceFee)}＝${money(result.paid)}` : `實際付款＝${money(result.product.discounted)}－${money(result.threshold.discount)}＝${money(result.paid)}`,
     `${data.storePoints.system || '店家點數'}：${multiplierText}＝${numberText(result.store.total)} 點，價值 ${money(result.store.value)}`,
     `信用卡：${cardText}`,
     `行動支付：${money(result.paid)} × ${numberText(data.payment.rate)}%（套用上限後）＝${money(result.payment)}`,
@@ -294,6 +295,7 @@ function updateServiceFeeVisibility() {
   const isOther=field('store')==='other',type=field('serviceFeeType');
   document.getElementById('serviceFeeBox').hidden=!isOther;
   if(!isOther)document.getElementById('serviceFeeType').value='none';
+  document.getElementById('serviceFeeBasisLabel').hidden=type!=='percent';
   document.getElementById('serviceFeeRateLabel').hidden=type!=='percent';
   document.getElementById('serviceFeeAmountLabel').hidden=type!=='fixed';
 }

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="一次計算商品折扣、店家點數、信用卡與行動支付回饋。">
   <title>這筆到底幾折？</title>
-  <link rel="stylesheet" href="style.css?v=20260824-1">
+  <link rel="stylesheet" href="style.css?v=20260824-2">
 </head>
 <body>
   <header class="hero">
@@ -51,6 +51,7 @@
           <label class="wide">預計消費日期<input id="purchaseDate" type="date"><small>系統會依星期與活動期間推薦付款優惠</small></label>
           <div id="serviceFeeBox" class="service-fee-box wide" hidden>
             <label>服務費方式<select id="serviceFeeType"><option value="none">無服務費</option><option value="percent">依比例計算</option><option value="fixed">固定金額</option></select></label>
+            <label id="serviceFeeBasisLabel">服務費計算基準<select id="serviceFeeBasis"><option value="discounted">折扣後價格</option><option value="original">折扣前原價</option></select></label>
             <label id="serviceFeeRateLabel">服務費比例（%）<input id="serviceFeeRate" type="number" min="0" max="100" step="0.01" value="10" inputmode="decimal"></label>
             <label id="serviceFeeAmountLabel" hidden>固定服務費（元）<input id="serviceFeeAmount" type="number" min="0" step="0.01" value="0" inputmode="decimal"></label>
           </div>
@@ -188,6 +189,6 @@
       </section>
     </div>
   </main>
-  <script src="app.js?v=20260824-1"></script>
+  <script src="app.js?v=20260824-2"></script>
 </body>
 </html>
